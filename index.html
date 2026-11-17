@@ -19,22 +19,17 @@ h1 {
   font-size: 45px;
 }
 
-.games {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 20px;
-}
-
-.game {
+.game-card {
+  display: inline-block;
   background: #202c42;
   padding: 30px;
   border-radius: 15px;
   width: 220px;
+  margin: 10px;
   transition: transform 0.2s;
 }
 
-.game:hover {
+.game-card:hover {
   transform: translateY(-5px);
 }
 
@@ -59,24 +54,24 @@ a:hover {
 <h1>🎮 MY GAMES</h1>
 <p>Welcome to my gaming website!</p>
 
-<div class="games">
+<section>
 
-  <div class="game">
+  <article class="game-card">
     <h2>Reef Run</h2>
-    <a href="reef-run.html">PLAY</a>
-  </div>
+    <a href="./reef-run.html">PLAY</a>
+  </article>
 
-  <div class="game">
+  <article class="game-card">
     <h2>Poly Track</h2>
-    <a href="poly.html">PLAY</a>
-  </div>
+    <a href="./poly.html">PLAY</a>
+  </article>
 
-  <div class="game">
+  <article class="game-card">
     <h2>Spikeball</h2>
-    <a href="spikeball.html">PLAY</a>
-  </div>
+    <a href="./spikeball.html">PLAY</a>
+  </article>
 
-</div>
+</section>
 
 </body>
 </html>
