@@ -1,0 +1,1863 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<script>
+/* Phone detection by window aspect ratio: .phone = tall/narrow (portrait), .land = short landscape (phone on its side).
+   Re-checked on resize/rotate, so a narrow desktop window gets the phone layout too. */
+(function(){
+  const root = document.documentElement;
+  function apply(){
+    const w = innerWidth, h = innerHeight;
+    const land = w > h && h <= 500;
+    const phone = !land && w <= 900 && h >= w * 1.2;
+    root.classList.toggle("land", land);
+    root.classList.toggle("phone", phone);
+  }
+  apply();
+  addEventListener("resize", apply);
+  addEventListener("orientationchange", () => setTimeout(apply, 150));
+})();
+</script>
+<title>Reef Run · a multiplayer dice board game</title>
+<style>
+  :root{
+    --c0:#2ec4b6; --c1:#ff9f1c; --c2:#b58cff; --c3:#ff718d; --ink:#10263a; --paper:#f4efe3; --muted:#a9c0d3;
+    --water-a:#1c6fa3; --water-b:#1a68995c; --good:#47d18c; --bad:#ff5c7a;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; min-height:100vh; color:#eaf4fb;
+    font-family:"Trebuchet MS",system-ui,-apple-system,"Segoe UI",sans-serif;
+    background:linear-gradient(180deg,#0a3556,#071d33 60%,#04101e) fixed;
+  }
+  .wrap{max-width:1040px; margin:0 auto; padding:16px 14px 50px}
+  h1{margin:4px 0 0; font-size:2rem; letter-spacing:.06em; text-align:center}
+  .sub{margin:2px 0 14px; text-align:center; color:var(--muted)}
+  .panel{background:var(--paper); color:var(--ink); border-radius:16px; padding:20px; box-shadow:0 6px 0 rgba(0,0,0,.3)}
+  button{
+    font:inherit; font-weight:700; cursor:pointer; border:0; border-radius:12px; padding:10px 18px;
+    color:#2a1500; background:linear-gradient(180deg,#ffb23f,#ff9314); box-shadow:0 3px 0 rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.45); transition:transform .12s,filter .15s;
+  }
+  button:active:not(:disabled){transform:translateY(2px); box-shadow:0 1px 0 rgba(0,0,0,.28)}
+  button:hover:not(:disabled){filter:brightness(1.06)}
+  button:disabled{cursor:default}
+  button.alt{background:#d9ccb0; color:var(--ink)}
+  button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #2f6bff; outline-offset:2px}
+  label{display:block; font-weight:700; margin:12px 0 4px}
+  input[type=text],select{width:100%; font:inherit; padding:9px 11px; border:2px solid #d9ccb0; border-radius:10px; background:#fff; color:var(--ink)}
+  .rules{line-height:1.5; padding-left:20px; margin:8px 0 14px}
+  .rules li{margin-bottom:4px}
+
+  .game{display:grid; grid-template-columns:minmax(0,640px) 1fr; gap:18px; align-items:start}
+  .board{
+    display:grid; grid-template-columns:repeat(13,1fr); gap:1px; padding:6px; border-radius:14px;
+    background:#06223a; box-shadow:0 6px 0 rgba(0,0,0,.35); width:100%;
+  }
+  .cell{
+    position:relative; aspect-ratio:1; padding:0; border-radius:4px; box-shadow:none; color:inherit;
+    background:linear-gradient(135deg,#2a86bd,#1c6fa3); display:grid; place-items:center; overflow:hidden;
+  }
+  .cell:nth-child(2n){background:linear-gradient(135deg,#2680b6,#1a68a0)}
+  .cell.home0{background:linear-gradient(135deg,#1f8f87,#187a73)}
+  .cell.home1{background:linear-gradient(135deg,#a7742a,#8a5d1f)}
+  .board.fourp .cell.home2{background:linear-gradient(135deg,#7657a8,#563b83)}
+  .board.fourp .cell.home3{background:linear-gradient(135deg,#bd536c,#91364d)}
+  .cell.t-K{background:linear-gradient(135deg,#1f7f6b,#17695a)}
+  .cell.t-R{background:linear-gradient(135deg,#40576b,#34495a)}
+  .cell svg{position:absolute; inset:0; width:100%; height:100%; pointer-events:none}
+  .cell.dest{box-shadow:inset 0 0 0 3px #fff; cursor:pointer}
+  .cell.dest::after{content:""; position:absolute; inset:0; background:rgba(255,255,255,.22); animation:pulse 1.2s ease-in-out infinite}
+  .cell.dest.bumpdest{box-shadow:inset 0 0 0 3px var(--bad)}
+  .cell.dest.bumpdest::after{background:rgba(255,92,122,.3)}
+  .cell.mine{cursor:pointer}
+  .cell.sel{box-shadow:inset 0 0 0 3px #fff}
+  .spin{transform-origin:50% 50%; animation:spin 6s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes pulse{50%{opacity:.35}}
+  @media (prefers-reduced-motion:reduce){ .spin,.cell.dest::after{animation:none} }
+
+  .side{display:flex; flex-direction:column; gap:12px}
+  .card{background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); border-radius:14px; padding:12px 14px}
+  .score{display:flex; gap:10px; flex-wrap:wrap}
+  .pl{flex:1 1 42%; min-width:0; border-radius:12px; padding:8px 10px; border:3px solid transparent; background:rgba(0,0,0,.25)}
+  .pl.on{border-color:#fff}
+  .pl b{display:block; font-size:1rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .pl .pts{font-size:1.8rem; font-weight:800}
+  .pl.p0 .pts{color:var(--c0)} .pl.p1 .pts{color:var(--c1)} .pl.p2 .pts{color:var(--c2)} .pl.p3 .pts{color:var(--c3)}
+  .dice{display:flex; gap:12px; flex-wrap:wrap}
+  .game.big{grid-template-columns:minmax(0,720px) 1fr}
+  .an-top{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap}
+  .an-num{font-size:2.4rem; font-weight:800; line-height:1}
+  .an-lbl{font-weight:800; font-size:1.05rem}
+  .an-bar{height:8px; border-radius:6px; background:rgba(255,255,255,.14); margin:8px 0 6px; overflow:hidden}
+  .an-bar i{display:block; height:100%; border-radius:6px; transition:width .4s}
+  .an-txt{margin:2px 0; font-size:.9rem; color:var(--muted); line-height:1.35}
+  .an-acc{margin:8px 0 0; font-size:.85rem; display:flex; gap:14px; flex-wrap:wrap}
+  .game.big .die{width:50px; height:50px; font-size:1.5rem; border-radius:11px}
+  .game.big .dice{gap:8px}
+  .phone .game.big .die,.land .game.big .die{width:46px; height:46px; font-size:1.4rem}
+  .game.big .cell svg{transform:scale(1.08)}
+  .die{
+    width:68px; height:68px; font-size:2rem; font-weight:800; border-radius:14px;
+    background:#fff; color:var(--ink); border:4px solid transparent; box-shadow:0 4px 0 rgba(0,0,0,.3);
+  }
+  .die.sel{border-color:#2f6bff}
+  .die.used{opacity:.3}
+  .status{font-weight:700; min-height:2.6em}
+  .log{margin:0; padding-left:18px; color:var(--muted); font-size:.9rem; max-height:150px; overflow:auto}
+  .hint{color:var(--muted); font-size:.85rem; margin:0}
+  .over{position:fixed; inset:0; background:rgba(2,10,20,.78); display:grid; place-items:center; padding:20px; z-index:5}
+  .over .panel{text-align:center; max-width:420px}
+  [hidden]{display:none !important}
+  @media (max-width:860px){ .game{grid-template-columns:1fr} }
+
+  /* ---------- OCEAN THEME ---------- */
+  body{background:linear-gradient(180deg,#1587b8 0%,#0a3556 35%,#071d33 70%,#04101e 100%) fixed; overflow-x:hidden}
+  .wrap{position:relative; z-index:1}
+  .sea{position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden}
+  .rays{position:absolute; inset:0 0 40% 0; opacity:.35}
+  .rays i{position:absolute; top:-10%; width:14vw; height:120%; transform-origin:top center;
+    background:linear-gradient(180deg,rgba(200,245,255,.55),rgba(200,245,255,0));
+    clip-path:polygon(40% 0,60% 0,100% 100%,0 100%); animation:sway 9s ease-in-out infinite}
+  .rays i:nth-child(1){left:2vw; transform:rotate(14deg)}
+  .rays i:nth-child(2){left:24vw; transform:rotate(8deg); animation-delay:-2s; width:10vw}
+  .rays i:nth-child(3){left:48vw; transform:rotate(2deg); animation-delay:-4s}
+  .rays i:nth-child(4){left:70vw; transform:rotate(-6deg); animation-delay:-6s; width:11vw}
+  .rays i:nth-child(5){left:90vw; transform:rotate(-12deg); animation-delay:-1s}
+  @keyframes sway{50%{opacity:.4; margin-left:3vw}}
+  .bubbles b{position:absolute; bottom:-30px; border-radius:50%; border:1.5px solid rgba(220,248,255,.7);
+    background:radial-gradient(circle at 30% 30%,rgba(255,255,255,.6),rgba(255,255,255,.05) 60%);
+    animation:rise linear infinite}
+  @keyframes rise{0%{transform:translate(0,0)} 50%{transform:translate(18px,-55vh)} 100%{transform:translate(-8px,-115vh); opacity:.1}}
+  .fishlane i{position:absolute; left:-80px; display:block; font-style:normal; filter:drop-shadow(0 2px 2px rgba(0,0,0,.3)); animation:swim linear infinite; opacity:.85}
+  .fishlane i.rev{animation-name:swimrev; left:auto; right:-80px}
+  .fishlane .tail{transform-box:fill-box; transform-origin:right center; animation:wag .5s ease-in-out infinite alternate}
+  @keyframes wag{from{transform:skewY(-14deg) scaleX(.9)} to{transform:skewY(14deg) scaleX(1.05)}}
+  @keyframes swim{from{transform:translateX(0)} to{transform:translateX(calc(100vw + 160px))}}
+  @keyframes swimrev{from{transform:translateX(0) scaleX(-1)} to{transform:translateX(calc(-100vw - 160px)) scaleX(-1)}}
+  .floor{position:absolute; left:0; right:0; bottom:0; width:100%; height:18vh}
+  .weeds{position:absolute; left:0; right:0; bottom:0; height:22vh}
+  .weeds i{position:absolute; bottom:-4px; width:14px; border-radius:14px 14px 0 0; transform-origin:bottom center;
+    background:linear-gradient(180deg,#3fbf8f,#16745c); animation:weed ease-in-out infinite}
+  @keyframes weed{0%,100%{transform:rotate(-7deg)} 50%{transform:rotate(7deg)}}
+  .bob{animation:bob 3.6s ease-in-out infinite}
+  @keyframes bob{50%{transform:translateY(-12px) rotate(3deg)}}
+
+  .screen{min-height:calc(100vh - 40px); display:flex; flex-direction:column; justify-content:center; align-items:center; gap:28px}
+  .title{text-align:center}
+  .logo{display:flex; flex-direction:column; align-items:center; gap:6px}
+  .logo-text{margin:0; font-size:clamp(3rem,12vw,6rem); line-height:1; letter-spacing:.08em; font-weight:900;
+    color:#fff6d8; text-shadow:0 4px 0 #0a3556,0 8px 0 rgba(0,0,0,.25),0 0 30px rgba(127,212,245,.6)}
+  .logo-text span:last-child{color:#ff9f1c}
+  .tag{margin:6px 0 0; color:#bfe6f7; font-size:1.1rem; text-shadow:0 2px 6px rgba(0,0,0,.4)}
+  .menu{display:flex; flex-direction:column; gap:14px; width:min(320px,86vw)}
+  button.big{font-size:1.35rem; padding:16px 22px; border-radius:18px; box-shadow:0 5px 0 rgba(0,0,0,.3),0 0 24px rgba(255,159,28,.35); transition:transform .15s}
+  button.big:hover{transform:translateY(-2px) scale(1.03)}
+  button.big.ghost{background:rgba(255,255,255,.14); color:#eaf4fb; border:2px solid rgba(255,255,255,.4); box-shadow:0 5px 0 rgba(0,0,0,.25)}
+  .card-screen .panel{width:min(640px,94vw)}
+  .glass{background:rgba(244,239,227,.96); backdrop-filter:blur(6px); border:3px solid #f2c14e; box-shadow:0 8px 0 rgba(0,0,0,.3),0 0 40px rgba(127,212,245,.35); animation:rise-in .5s ease-out}
+  .glass h2{margin-top:0}
+  @keyframes rise-in{from{opacity:0; transform:translateY(24px)}}
+  .seg{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+  .segbtn{background:#e6dcc3; color:var(--ink); border:3px solid transparent}
+  .segbtn.on{background:#2ec4b6; color:#04241f; border-color:var(--ink)}
+  .names{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+  @media (max-width:560px){ .names{grid-template-columns:1fr} }
+  .game,#gamehead{position:relative; z-index:1}
+  @media (prefers-reduced-motion:reduce){ .rays i,.bubbles b,.fishlane i,.fishlane .tail,.weeds i,.bob,.glass{animation:none} }
+
+  /* settings rows + toggle switches */
+  .setrow{display:flex; align-items:center; justify-content:space-between; gap:14px; padding:12px 14px; margin-bottom:10px; border-radius:12px; background:rgba(16,38,58,.06); border-left:5px solid #2ec4b6; cursor:pointer}
+  .setrow:nth-of-type(even){border-left-color:#ff9f1c}
+  .settxt b{display:block; font-size:1.05rem}
+  .settxt small{display:block; margin-top:3px; color:#3a5568; line-height:1.3; font-size:.85rem}
+  button.switch{flex:none; position:relative; width:58px; height:32px; padding:0; border-radius:20px; background:#b9ad92; border:2px solid var(--ink); box-shadow:inset 0 2px 4px rgba(0,0,0,.25); transition:background .2s}
+  button.switch span{position:absolute; top:2px; left:2px; width:24px; height:24px; border-radius:50%; background:#fff; box-shadow:0 2px 0 rgba(0,0,0,.3); transition:transform .2s}
+  button.switch[aria-checked=true]{background:#2ec4b6}
+  button.switch[aria-checked=true] span{transform:translateX(26px)}
+  button.switch:disabled{opacity:.6; cursor:default}
+  #bubblewipe{position:fixed; inset:0; z-index:40; pointer-events:none; overflow:hidden}
+  /* ---------- ANIMATION FX ---------- */
+  .boardwrap{position:relative}
+  #fxlayer{position:absolute; inset:0; pointer-events:none; z-index:20; overflow:visible}
+  .fxp{position:absolute; pointer-events:none; translate:-50% -50%; line-height:1; user-select:none; will-change:transform,opacity}
+  .fxbub{border-radius:50%; border:1.5px solid rgba(225,248,255,.9); background:radial-gradient(circle at 30% 30%,rgba(255,255,255,.7),rgba(255,255,255,.1) 65%)}
+  .fxring{border-radius:50%; border:4px solid #ffd45c; box-shadow:0 0 18px #ffd45c}
+  .fxtxt{font-weight:900; font-size:2rem; white-space:nowrap; text-shadow:0 2px 0 #06223a,0 0 12px rgba(255,255,255,.6)}
+  .itm{position:absolute; inset:0; pointer-events:none}
+  .cell svg.dvr{animation:dfloat 3.2s ease-in-out infinite}
+  .cell:nth-child(3n) svg.dvr{animation-delay:-1s} .cell:nth-child(3n+1) svg.dvr{animation-delay:-2s}
+  @keyframes dfloat{50%{transform:translateY(-2px)}}
+  .die{will-change:transform}
+  .conf{position:absolute; top:-40px; pointer-events:none; z-index:0}
+  @media (prefers-reduced-motion:reduce){ .cell svg.dvr{animation:none} }
+
+  /* ---------- MENUS & POLISH ---------- */
+  .glass h2{display:flex; align-items:center; gap:8px; margin:0 0 10px; padding-bottom:10px; border-bottom:3px dotted #d9ccb0; font-size:1.5rem}
+  .over .glass h2{justify-content:center; border:0; padding-bottom:0; margin:4px 0 8px}
+  label small{font-weight:400; color:#5b7384; margin-left:4px}
+  .chip{display:inline-block; width:13px; height:13px; border-radius:50%; margin-right:7px; vertical-align:-1px; border:2px solid var(--ink)}
+  .chip.c0{background:var(--c0)} .chip.c1{background:var(--c1)} .chip.c2{background:var(--c2)} .chip.c3{background:var(--c3)}
+  .segbtn{display:flex; align-items:center; justify-content:center; gap:7px; padding:12px 8px; transition:transform .12s,background .15s}
+  .segbtn .ico{font-size:1.25rem}
+  .names{align-items:start}
+  .seg3{display:grid; grid-template-columns:repeat(3,1fr); gap:6px}
+  .dbtn{display:flex; flex-direction:column; align-items:center; gap:3px; padding:8px 4px; background:#e6dcc3; color:var(--ink); border:3px solid transparent; box-shadow:0 3px 0 rgba(0,0,0,.2)}
+  .dbtn .di{font-size:1.6rem; line-height:1; transition:transform .2s}
+  .dbtn.on{border-color:var(--ink); box-shadow:0 3px 0 rgba(0,0,0,.35)}
+  .dbtn[data-diff=easy].on{background:linear-gradient(180deg,#a6f0c4,#6be3b5)}
+  .dbtn[data-diff=medium].on{background:linear-gradient(180deg,#ffe38a,#ffd45c)}
+  .dbtn[data-diff=hard].on{background:linear-gradient(180deg,#ffa58c,#ff7a59)}
+  .dbtn.on .di{animation:pop .35s ease-out; transform:scale(1.15)}
+  @keyframes pop{50%{transform:scale(1.45) rotate(-8deg)}}
+  .diffnote{margin:12px 0 0; padding:9px 12px; border-radius:10px; background:rgba(16,38,58,.07); font-size:.92rem; line-height:1.35; color:#2a4558; border-left:5px solid #ff9f1c}
+  .record{margin:8px 0 0; font-size:.88rem; color:#3a5568}
+  .legend{display:flex; flex-wrap:wrap; gap:8px; margin:4px 0 14px; justify-content:space-between}
+  .lg{display:flex; flex-direction:column; align-items:center; gap:4px; width:76px; text-align:center}
+  .lg small{font-size:.72rem; line-height:1.15; color:#3a5568}
+  .lgt{position:relative; display:block; width:46px; height:46px; border-radius:9px; overflow:hidden; background:linear-gradient(135deg,#2a86bd,#1c6fa3); box-shadow:0 2px 0 rgba(0,0,0,.25)}
+  .lgt svg{position:absolute; inset:0; width:100%; height:100%}
+  .lgt.t-kelp{background:linear-gradient(135deg,#1f7f6b,#17695a)}
+  .lgt.t-rock{background:linear-gradient(135deg,#40576b,#34495a)}
+  .rules{list-style:none; padding:0; display:grid; gap:8px; margin:8px 0 14px}
+  .rules li{margin:0; padding:9px 12px; border-radius:12px; background:rgba(16,38,58,.06); border-left:5px solid #2ec4b6}
+  .rules li:nth-child(even){border-left-color:#ff9f1c}
+  .logo-text{animation:glow 4.5s ease-in-out infinite}
+  @keyframes glow{50%{text-shadow:0 4px 0 #0a3556,0 8px 0 rgba(0,0,0,.25),0 0 46px rgba(127,212,245,.95)}}
+  #play{animation:playpulse 2.4s ease-in-out infinite}
+  @keyframes playpulse{50%{box-shadow:0 5px 0 rgba(0,0,0,.3),0 0 38px rgba(255,159,28,.8)}}
+  /* in-game: pearl pips, active-player glow, thinking dots, water shimmer */
+  .pl{transition:border-color .2s,box-shadow .2s}
+  .pl.on{animation:turnpulse 1.8s ease-out infinite}
+  @keyframes turnpulse{0%{box-shadow:0 0 0 0 rgba(255,255,255,.55)} 100%{box-shadow:0 0 0 12px rgba(255,255,255,0)}}
+  .pips{display:flex; gap:5px; margin:2px 0 5px}
+  .pips span{width:14px; height:14px; border-radius:50%; background:rgba(255,255,255,.1); border:1.5px solid rgba(255,255,255,.35); transition:background .3s,transform .3s}
+  .pips span.on{transform:scale(1.1); border-color:#fff}
+  .p0 .pips span.on{background:radial-gradient(circle at 35% 30%,#fff,var(--c0) 70%)}
+  .p1 .pips span.on{background:radial-gradient(circle at 35% 30%,#fff,var(--c1) 70%)}
+  .status.thinking::after{content:"..."; display:inline-block; overflow:hidden; width:0; vertical-align:bottom; animation:dots 1.3s steps(4) infinite}
+  @keyframes dots{to{width:1.1em}}
+  .board{position:relative}
+  .board::after{content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none; opacity:.16; z-index:2;
+    background:radial-gradient(circle at 20% 30%,#fff 0,transparent 22%),radial-gradient(circle at 70% 60%,#fff 0,transparent 20%),radial-gradient(circle at 45% 85%,#fff 0,transparent 18%);
+    background-size:260px 260px; animation:caustic 16s linear infinite}
+  @keyframes caustic{to{background-position:260px 130px}}
+  .phone .board::after,.land .board::after{display:none}
+  .trophy{font-size:3.2rem; line-height:1}
+  @media (prefers-reduced-motion:reduce){ .logo-text,#play,.pl.on,.board::after,.status.thinking::after,.dbtn.on .di{animation:none} }
+
+  /* ---------- TITLE INTRO ---------- */
+  #title.intro{overflow:hidden}
+  #title.intro .diver,#title.intro .logo-text,#title.intro .tag,#title.intro .menu button{opacity:0}
+  #title.intro .menu{pointer-events:none}
+  #introfx{position:fixed; inset:0; z-index:6; pointer-events:none; overflow:hidden}
+  #gate{position:fixed; inset:0; z-index:7; display:grid; place-items:center; width:100%; height:100%; border-radius:0; padding:0;
+    background:transparent; box-shadow:none; color:#eaf4fb; font-size:1.5rem; text-shadow:0 2px 8px rgba(0,0,0,.5); cursor:pointer}
+  #gate span{padding:14px 26px; border-radius:40px; background:rgba(6,34,58,.55); border:2px solid rgba(255,255,255,.45); animation:gatepulse 1.6s ease-in-out infinite}
+  @keyframes gatepulse{50%{opacity:.55; transform:scale(.97)}}
+  html{-webkit-tap-highlight-color:transparent}
+  button,.cell{touch-action:manipulation}
+
+  /* ---------- PHONE LAYOUT (portrait / narrow aspect ratio) ---------- */
+  .phone .wrap{padding:calc(8px + env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) calc(28px + env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left))}
+  .phone h1{font-size:1.45rem; margin:0}
+  .phone .sub{display:none}
+  .phone .game{display:flex; flex-direction:column; gap:10px; margin-top:6px}
+  .phone .game>div:first-child{order:2; width:100%}
+  .phone .side{display:contents}
+  .phone #score{order:1; gap:8px}
+  .phone .side>.card:nth-child(2){order:3}
+  .phone .side>.card:nth-child(3){order:4}
+  .phone #restart{order:5; min-height:44px}
+  .phone .board{padding:3px; max-width:560px; margin:0 auto; border-radius:10px}
+  .phone .cell{border-radius:3px}
+  .phone .pl{padding:6px 9px; border-width:2px}
+  .phone .pl b{font-size:.9rem}
+  .phone .pl .pts{font-size:1.4rem}
+  .phone .card{padding:10px 12px}
+  .phone .status{min-height:2.4em; font-size:.95rem}
+  .phone .card button:not(.die){min-height:46px}
+  .phone .die{width:58px; height:58px; font-size:1.7rem}
+  .phone .dice{gap:10px}
+  .phone .log{max-height:84px; font-size:.82rem}
+  .phone .screen{min-height:calc(100vh - 28px); min-height:calc(100dvh - 28px); gap:20px}
+  .phone .card-screen{justify-content:flex-start; padding-top:8px}
+  .phone .logo-text{font-size:clamp(2.6rem,15vw,4.6rem)}
+  .phone .diver{width:96px; height:96px}
+  .phone .tag{font-size:1rem; padding:0 12px}
+  .phone .menu{width:min(300px,84vw)}
+  .phone button.big{font-size:1.2rem; padding:15px 20px}
+  .phone .card-screen .panel{width:100%}
+  .phone .glass{padding:16px 14px}
+  .phone .glass button{min-height:46px}
+  .phone .rules{font-size:.92rem}
+  .phone .names{grid-template-columns:1fr}
+  .phone .dbtn{padding:8px 2px}
+  .phone .dbtn b{font-size:.9rem}
+  .phone .pips span{width:11px; height:11px}
+  .phone .lg{width:64px}
+  .phone input[type=text],.phone select{font-size:16px; min-height:44px}   /* 16px stops iOS zooming into inputs */
+  .phone .over .panel{width:100%; padding:18px}
+  .phone .over button{min-height:48px}
+  /* lighter backdrop = smoother on phones */
+  .phone .rays,.land .rays{display:none}
+  .phone .fishlane i:nth-child(n+5),.land .fishlane i:nth-child(n+4){display:none}
+  .phone .bubbles b:nth-child(n+14),.land .bubbles b:nth-child(n+10){display:none}
+  .phone .weeds i:nth-child(2n),.land .weeds i:nth-child(2n){display:none}
+
+  /* ---------- PHONE ON ITS SIDE (short landscape) ---------- */
+  .land .wrap{padding:6px max(10px,env(safe-area-inset-right)) 8px max(10px,env(safe-area-inset-left))}
+  .land #gamehead{display:none}
+  .land .game{grid-template-columns:auto minmax(0,1fr); gap:12px}
+  .land .boardwrap{width:min(640px,calc(100vh - 16px)); width:min(640px,calc(100dvh - 16px))}
+  .land .board{padding:3px}
+  .land .side{padding-top:0; max-height:calc(100dvh - 16px); overflow:auto; gap:8px}
+  .land .card{padding:8px 10px}
+  .land .pl .pts{font-size:1.3rem}
+  .land .die{width:50px; height:50px; font-size:1.5rem}
+  .land .log{max-height:60px}
+  .land .screen{min-height:calc(100dvh - 14px); gap:10px}
+  .land .logo-text{font-size:clamp(2rem,16vh,3.4rem)}
+  .land .diver{width:56px; height:56px}
+  .land .tag{display:none}
+  .land .menu{flex-direction:row; width:auto}
+  .land button.big{font-size:1.05rem; padding:12px 18px}
+  .land .card-screen{justify-content:flex-start}
+  .land .glass{padding:12px 16px}
+  @media (prefers-reduced-motion:reduce){ #gate span{animation:none} }
+
+  /* ---------- "LIMIT ANIMATIONS" SETTING (same rules as prefers-reduced-motion) ---------- */
+  .limit .spin,.limit .cell.dest::after,.limit .rays i,.limit .bubbles b,.limit .fishlane i,.limit .fishlane .tail,.limit .weeds i,.limit .bob,.limit .glass,
+  .limit .cell svg.dvr,.limit .logo-text,.limit #play,.limit .pl.on,.limit .board::after,.limit .status.thinking::after,.limit .dbtn.on .di,.limit #gate span{animation:none}
+  .limit button.switch,.limit button.switch span{transition:none}
+</style>
+</head>
+<body>
+<!-- UNDERWATER BACKDROP -->
+<div class="sea" aria-hidden="true">
+  <div class="rays"><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="bubbles" id="bubbles"></div>
+  <div class="fishlane" id="fishlane"></div>
+  <svg class="floor" viewBox="0 0 1200 160" preserveAspectRatio="none">
+    <path d="M0 160V110C120 80 220 130 340 105S560 70 700 105 960 135 1080 100 1160 90 1200 100V160Z" fill="#06223a"/>
+    <path d="M0 160V132C140 112 260 150 400 132S640 108 800 134 1040 150 1200 128V160Z" fill="#04162a"/>
+  </svg>
+  <div class="weeds" id="weeds"></div>
+</div>
+
+<div id="bubblewipe" aria-hidden="true"></div>
+<div id="introfx" aria-hidden="true"></div>
+<button type="button" id="gate" hidden><span>🌊 Tap to dive in</span></button>
+
+<div class="wrap">
+  <header id="gamehead" hidden>
+    <h1>REEF RUN</h1>
+    <p class="sub">Roll, dive, grab pearls, haul them home.</p>
+  </header>
+
+  <!-- TITLE -->
+  <section class="screen title intro" id="title">
+    <div class="logo">
+      <svg class="diver bob" viewBox="0 0 120 120" width="120" height="120" aria-hidden="true">
+        <circle cx="60" cy="60" r="54" fill="#0b3a5e" stroke="#f2c14e" stroke-width="6"/>
+        <circle cx="60" cy="60" r="44" fill="#1c6fa3"/>
+        <ellipse cx="60" cy="66" rx="22" ry="24" fill="#ff9f1c"/>
+        <rect x="42" y="44" width="36" height="24" rx="10" fill="#10263a"/>
+        <rect x="46" y="48" width="28" height="16" rx="7" fill="#7fd4f5"/>
+        <path d="M50 52q6-4 12-2" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round" opacity=".8"/>
+        <rect x="34" y="62" width="8" height="26" rx="4" fill="#2ec4b6"/>
+        <circle cx="94" cy="26" r="4" fill="#d8f3ff" opacity=".8"/><circle cx="102" cy="14" r="2.5" fill="#d8f3ff" opacity=".7"/>
+      </svg>
+      <h1 class="logo-text"><span>REEF</span> <span>RUN</span></h1>
+      <p class="tag">Roll, dive, grab pearls, haul them home.</p>
+    </div>
+    <div class="menu">
+      <button class="big" id="play">🤿 Play</button>
+      <button class="big ghost" id="howbtn">📖 How to play</button>
+      <button class="big ghost" id="setbtn">⚙️ Settings</button>
+    </div>
+  </section>
+
+  <!-- HOW TO PLAY -->
+  <section class="screen card-screen" id="howto" hidden>
+    <div class="panel glass">
+      <h2>📖 How to play</h2>
+      <div class="legend" id="legend"></div>
+      <ul class="rules">
+      <li><b>🎯 Goal:</b> be first to bank <b>5 points</b>. A pearl is worth 1, the golden chest is worth 2. Pearls are scattered at random each game, always mirrored so it stays fair. It surfaces in the middle once each player has had two turns.</li>
+      <li><b>🎲 Your turn:</b> roll two dice. Use each die to move one of your three divers (any diver, any order, up to that many steps, no diagonals). You may use both dice on the same diver.</li>
+      <li><b>🎒 Carry:</b> end a move on a pearl or the chest to pick it up. A diver carries one thing at a time. Swim back to <b>your home row</b> to bank it. The chest is heavy: whenever you move its carrier, each die counts for half (rounded up). A 6 moves him 3, a 5 moves him 3, a 4 moves him 2.</li>
+      <li><b>💥 Bump:</b> end a move on an enemy diver to send them back to their home row. They drop whatever they were carrying right there, and you can scoop it up. Divers on their own home row are safe.</li>
+      <li><b>🪸 Terrain:</b> rocks block the way, kelp costs 2 steps to enter, and ending on a whirlpool sweeps you to the other whirlpool.</li>
+      <li><b>⚖️ Tiebreaker:</b> if every piece is banked and the score is tied 4-4, a fresh golden chest appears in the middle. Whoever banks it wins.</li>
+      <li><b>🎲🎲 Doubles:</b> roll the same number twice and, after using both dice, you choose: swap one of your divers with any opponent diver (swapping ends your turn; divers on their home row are safe from swaps), or roll again. You can only roll again once per turn; if you roll doubles a second time, you can swap or end your turn.</li>
+      <li><b>🌊 Tide token:</b> once per game, after rolling and before moving, you may spend your token to reroll both dice. You must keep the new result.</li>
+      <li><b>🕳️ Hidden Mode (Settings):</b> a much bigger reef (23×23). Each player has <b>8 divers</b>, you roll <b>6 dice</b> and can use each one, the reef holds <b>16 pearls</b> and <b>2 golden chests</b> (they surface together), and each player has <b>2 tide tokens</b>. First to <b>10 points</b> wins. Bonus rule: instead of doubles, rolling <b>three or more of a kind</b> lets you swap or roll again.</li>
+      <li><b>🪙 Who starts:</b> chosen at random.</li>
+      <li><b>🤖 Bot levels:</b> <b>Easy</b> wanders and misses chances. <b>Medium</b> plays a solid game. <b>Hard</b> races you for the golden chest, hunts your carriers and plans both dice together.</li>
+    </ul>
+      <p style="margin:16px 0 0"><button class="alt" id="howback">⬅ Back</button> <button id="howplay">🤿 Play</button></p>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="screen card-screen" id="settings" hidden>
+    <div class="panel glass">
+      <h2>⚙️ Settings</h2>
+      <div class="setrow" data-set="sound">
+        <div class="settxt" id="lbl-sound"><b>🔊 Sound</b><small>Music and sound effects.</small></div>
+        <button type="button" class="switch" role="switch" id="set-sound" aria-labelledby="lbl-sound" aria-checked="true"><span></span></button>
+      </div>
+      <div class="setrow" data-set="quick">
+        <div class="settxt" id="lbl-quick"><b>⚡ Quick opening animation</b><small>When you open the game, play a short opening animation instead of the “Tap to dive in” screen.</small></div>
+        <button type="button" class="switch" role="switch" id="set-quick" aria-labelledby="lbl-quick" aria-checked="false"><span></span></button>
+      </div>
+      <div class="setrow" data-set="limit">
+        <div class="settxt" id="lbl-limit"><b>🐢 Limit animations</b><small>Turns off most motion: the opening, screen transitions, dice tumbling, swimming, confetti and the drifting fish and bubbles.<span id="limit-os" hidden> Your device is already set to reduce motion.</span></small></div>
+        <button type="button" class="switch" role="switch" id="set-limit" aria-labelledby="lbl-limit" aria-checked="false"><span></span></button>
+      </div>
+      <div class="setrow" data-set="analyst">
+        <div class="settxt" id="lbl-analyst"><b>🔍 Move Analyst</b><small>An engine checks every move against all the alternatives and rates it from 1 to 100 (100 = the best possible move), shows what was best, and tracks each player’s accuracy.</small></div>
+        <button type="button" class="switch" role="switch" id="set-analyst" aria-labelledby="lbl-analyst" aria-checked="true"><span></span></button>
+      </div>
+      <div class="setrow" data-set="hidden">
+        <div class="settxt" id="lbl-hidden"><b>🕳️ Hidden Mode</b><small>A giant reef: a 23×23 board, 8 divers each, 6 dice, 16 pearls, 2 golden chests and 2 tide tokens each. First to 10 points wins.</small></div>
+        <button type="button" class="switch" role="switch" id="set-hidden" aria-labelledby="lbl-hidden" aria-checked="false"><span></span></button>
+      </div>
+      <p style="margin:20px 0 0"><button class="alt" id="settingsback">⬅ Back</button></p>
+    </div>
+  </section>
+
+  <!-- SETUP -->
+  <section class="screen card-screen" id="setup" hidden>
+    <div class="panel glass">
+      <h2>🤿 Choose your divers</h2>
+      <label>Opponent</label>
+      <div class="seg" role="group" aria-label="Opponent">
+        <button type="button" class="segbtn on" data-mode="2p"><span class="ico">👥</span> Two players</button>
+        <button type="button" class="segbtn" data-mode="cpu"><span class="ico">🤖</span> Play the bot</button>
+        <button type="button" class="segbtn" data-mode="4p"><span class="ico">🐠</span> Four players</button>
+      </div>
+      <select id="mode" hidden><option value="2p">Two players on this device</option><option value="cpu">Play against the computer</option><option value="4p">Four players on this device</option></select>
+      <div class="names">
+        <div><label for="n1"><i class="chip c0"></i>Player 1 <small>teal, bottom</small></label><input type="text" id="n1" maxlength="14" value="Player 1"></div>
+        <div id="p2box"><label for="n2"><i class="chip c1"></i>Player 2 <small>amber, top</small></label><input type="text" id="n2" maxlength="14" value="Player 2"></div>
+        <div id="p3box" hidden><label for="n3"><i class="chip c2"></i>Player 3 <small>purple, left</small></label><input type="text" id="n3" maxlength="14" value="Player 3"></div>
+        <div id="p4box" hidden><label for="n4"><i class="chip c3"></i>Player 4 <small>coral, right</small></label><input type="text" id="n4" maxlength="14" value="Player 4"></div>
+        <div id="diffbox" hidden>
+          <label id="difflbl"><i class="chip c1"></i>Computer difficulty</label>
+          <div class="seg3" role="radiogroup" aria-labelledby="difflbl">
+            <button type="button" class="dbtn" role="radio" aria-checked="false" data-diff="easy"><span class="di">🐠</span><b>Easy</b></button>
+            <button type="button" class="dbtn" role="radio" aria-checked="false" data-diff="medium"><span class="di">🐬</span><b>Medium</b></button>
+            <button type="button" class="dbtn" role="radio" aria-checked="false" data-diff="hard"><span class="di">🦈</span><b>Hard</b></button>
+          </div>
+        </div>
+      </div>
+      <p class="diffnote" id="diffnote" hidden></p>
+      <p class="diffnote" id="fourhint" hidden>🐠 Four-player free-for-all: bottom, top, left and right reef edges are each a home row. All four players take turns on this device.</p>
+      <p class="diffnote" id="hiddennote" hidden>🕳️ <b>Hidden Mode is on:</b> giant 23×23 reef, 8 divers each, 6 dice, 16 pearls, 2 chests, 2 tide tokens each. First to 10 wins. (Turn it off in Settings.)</p>
+      <p class="record" id="record" hidden></p>
+      <p style="margin:20px 0 0"><button class="alt" id="setupback">⬅ Back</button> <button id="start">🌊 Dive in</button></p>
+    </div>
+  </section>
+
+  <!-- GAME -->
+  <section class="game" id="game" hidden>
+    <div>
+      <div class="boardwrap">
+        <div class="board" id="board" role="grid" aria-label="Game board"></div>
+        <div id="fxlayer" aria-hidden="true"></div>
+      </div>
+    </div>
+    <div class="side">
+      <div class="score" id="score"></div>
+      <div class="card">
+        <div class="status" id="status" aria-live="polite"></div>
+        <p style="margin:10px 0; display:flex; gap:8px; flex-wrap:wrap"><button id="roll">Roll dice</button><button id="tide" class="alt" hidden>🌊 Use tide token (reroll)</button><button id="skip" class="alt" hidden>Roll again</button></p>
+        <div class="dice" id="dice"></div>
+      </div>
+      <div class="card" id="analysis" hidden></div>
+      <div class="card">
+        <p class="hint" style="margin-bottom:6px">Recent events</p>
+        <ul class="log" id="log"></ul>
+      </div>
+      <button id="restart" class="alt">New game</button>
+    </div>
+  </section>
+</div>
+
+<div class="over" id="over" hidden>
+  <div class="panel glass">
+    <div class="trophy bob" id="over-ico" aria-hidden="true">🏆</div>
+    <h2 id="over-title" style="margin-top:0"></h2>
+    <p id="over-sub"></p>
+    <p class="record" id="over-rec"></p>
+    <p id="over-acc" style="margin:6px 0 12px"></p>
+    <button id="again">Play again</button> <button id="exit" class="alt">Exit</button>
+  </div>
+</div>
+
+<script>
+/* ---------- BOARD DATA ---------- */
+let N = 13, WIN = 5, START_COLS = [4, 6, 8], MID = (N - 1) / 2;
+let DIVERS = 3, DICE = 2, MATCH = 2, TIDES = 1, CHEST_SPOTS = [[6, 6]], BIG = false;
+// . water  K kelp  R rock  W whirlpool   (180-degree symmetric, so it's fair; pearls are scattered randomly each game)
+const MAP_CLASSIC = [
+  ".............",
+  "..K.......K..",
+  "...R...K.....",
+  "..W...K......",
+  "..........R..",
+  ".....R.......",
+  "..K.........K..",
+  ".......R.....",
+  "..R..........",
+  "......K...W..",
+  ".....K...R...",
+  "..K.......K..",
+  "............."
+];
+let MAP = MAP_CLASSIC;
+const T = (r, c) => { const ch = MAP[r][c]; return (ch === "K" || ch === "R" || ch === "W") ? ch : "."; };
+const homeRow = o => o === 0 ? N - 1 : 0; // retained for two-player AI heuristics
+const isHome = (o, r, c) => o === 0 ? r === N - 1 : o === 1 ? r === 0 : o === 2 ? c === 0 : c === N - 1;
+const homePosition = (o, i) => o === 0 ? [N - 1, START_COLS[i % DIVERS]] :
+  o === 1 ? [0, START_COLS[i % DIVERS]] :
+  o === 2 ? [START_COLS[i % DIVERS], 0] : [START_COLS[i % DIVERS], N - 1];
+const val = x => x === "chest" ? 2 : 1;
+const DIRS = [[1,0],[-1,0],[0,1],[0,-1]];
+const COLOR = ["#2ec4b6", "#ff9f1c", "#b58cff", "#ff718d"];
+let WHIRLS = [];
+function findWhirls(){ WHIRLS = []; for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (MAP[r][c] === "W") WHIRLS.push([r, c]); }
+findWhirls();
+
+/* Hidden Mode: a bigger reef. The map is generated fresh each game but is always 180-degree symmetric, so it stays fair. */
+function genBigMap(n){
+  const mid = (n - 1) / 2, spots = [[mid, mid - 3], [mid, mid + 3]];
+  const rand = () => Math.random();
+  for (let attempt = 0; attempt < 200; attempt++){
+    const g = Array.from({length:n}, () => Array(n).fill("."));
+    const used = new Set(["" + mid + "," + mid]);
+    spots.forEach(([r, c]) => used.add(r + "," + c));
+    const put = (r, c, ch) => {
+      const mr = n - 1 - r, mc = n - 1 - c, k = r + "," + c, k2 = mr + "," + mc;
+      if (used.has(k) || used.has(k2) || k === k2) return false;
+      g[r][c] = ch; g[mr][mc] = ch; used.add(k); used.add(k2); return true;
+    };
+    const place = (count, ch, r0, r1) => {
+      let tries = 0;
+      while (count > 0 && tries++ < 2000){
+        const r = r0 + Math.floor(rand() * (r1 - r0 + 1)), c = Math.floor(rand() * n);
+        if (put(r, c, ch)) count--;
+      }
+    };
+    // one whirlpool pair, well apart from each other
+    for (let t = 0; t < 200; t++){
+      const r = 4 + Math.floor(rand() * 5), c = Math.floor(rand() * n);
+      if (Math.abs(r - (n - 1 - r)) + Math.abs(c - (n - 1 - c)) >= 10 && put(r, c, "W")) break;
+    }
+    place(9, "R", 2, n - 3);      // rocks stay off the home rows and the row next to them
+    place(16, "K", 1, n - 2);     // kelp patches
+    // every open square must still be reachable
+    let open = 0, seen = new Set();
+    const q = [[0, 0]]; seen.add("0,0");
+    g.forEach(row => row.forEach(ch => { if (ch !== "R") open++; }));
+    while (q.length){
+      const [r, c] = q.pop();
+      [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dr, dc]) => {
+        const nr = r + dr, nc = c + dc, k = nr + "," + nc;
+        if (nr < 0 || nc < 0 || nr >= n || nc >= n || g[nr][nc] === "R" || seen.has(k)) return;
+        seen.add(k); q.push([nr, nc]);
+      });
+    }
+    if (seen.size === open && g.flat().filter(x => x === "W").length === 2) return g.map(row => row.join(""));
+  }
+  return Array.from({length:n}, () => ".".repeat(n));
+}
+function applyConfig(big){
+  BIG = !!big;
+  if (BIG){
+    N = 23; WIN = 10; DIVERS = 8; DICE = 6; MATCH = 3; TIDES = 2; PEARL_PAIRS = 8; PEARL_ROWS = [4, 18];
+    START_COLS = [1, 4, 7, 10, 12, 15, 18, 21];
+    MID = (N - 1) / 2; CHEST_SPOTS = [[MID, MID - 3], [MID, MID + 3]];
+    MAP = genBigMap(N);
+  } else {
+    N = 13; WIN = 5; DIVERS = 3; DICE = 2; MATCH = 2; TIDES = 1; PEARL_PAIRS = 3; PEARL_ROWS = [3, 9];
+    START_COLS = [4, 6, 8];
+    MID = (N - 1) / 2; CHEST_SPOTS = [[MID, MID]];
+    MAP = MAP_CLASSIC;
+  }
+  findWhirls();
+}
+
+/* ---------- GAME STATE ---------- */
+let G = null, aiTimer = null;
+const FX = {bump:new Set(), whirl:new Set(), roll:false, tidePick:null};   // visual-only hints for the animation layer
+let prevSnap = null, fxBusyUntil = 0, fxBank = false;
+const $ = id => document.getElementById(id);
+const TIDE_MAX = 3, TIDE_ROWS = [3, 8], TIDE_CHANCE = 0.05;
+function spawnTide(){
+  const cands = [];
+  for (let r = TIDE_ROWS[0]; r <= Math.min(TIDE_ROWS[1], N - 1); r++) for (let c = 0; c < N; c++){
+    if (T(r, c) === "R" || T(r, c) === "W" || G.items[r][c] || cellDiver(r, c)) continue;
+    cands.push([r, c]);
+  }
+  if (!cands.length) return;
+  const [r, c] = cands[Math.floor(Math.random() * cands.length)];
+  G.tideTile = {r, c}; log("A tide token drifts into the reef!");
+}
+
+// Scatter pearls at random: PEARL_PAIRS mirrored pairs (180-degree symmetric) inside the middle 7 rows
+let PEARL_PAIRS = 3, PEARL_ROWS = [3, 9];
+function scatterPearls(items){
+  const cands = [];
+  for (let r = PEARL_ROWS[0]; r <= PEARL_ROWS[1]; r++) for (let c = 0; c < N; c++){
+    const mr = N - 1 - r, mc = N - 1 - c;
+    if (r * N + c >= mr * N + mc) continue;                 // one representative per mirrored pair (skips the centre too)
+    if (T(r, c) === "R" || T(r, c) === "W" || T(mr, mc) === "R" || T(mr, mc) === "W") continue;
+    cands.push([r, c]);
+  }
+  for (let i = cands.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [cands[i], cands[j]] = [cands[j], cands[i]]; }
+  cands.slice(0, PEARL_PAIRS).forEach(([r, c]) => { items[r][c] = "pearl"; items[N - 1 - r][N - 1 - c] = "pearl"; });
+}
+function newGame(names, vsCpu, level){
+  applyConfig(SET.hidden);
+  const items = Array.from({length:N}, () => Array.from({length:N}, () => null));
+  scatterPearls(items);
+  const divers = [], playerCount = names.length;
+  for (let o = 0; o < playerCount; o++) for (let i = 0; i < DIVERS; i++){
+    const [r, c] = homePosition(o, i);
+    divers.push({id:o * DIVERS + i, owner:o, label:"ABCDEFGH"[i], r, c, carry:null});
+  }
+  G = {names, vsCpu, playerCount, level:level || "medium", items, divers, score:Array(playerCount).fill(0),
+       turn:Math.floor(Math.random() * playerCount), phase:"roll", dice:[],
+       sel:{die:null, diver:null}, bonusTaken:false, tieChest:false, chestClaimed:false, tideTile:null, tide:Array(playerCount).fill(TIDES),
+       big:BIG, last:null, stats:Array.from({length:playerCount}, () => []), turnsDone:0,
+       chestSpawned:false, rerolled:false, over:false, winner:null, log:[]};
+  FX.bump.clear(); FX.whirl.clear(); FX.roll = false; prevSnap = null; fxBusyUntil = 0;
+  log(names[G.turn] + " goes first (chosen at random).");
+}
+const log = m => { G.log.unshift(m); if (G.log.length > 40) G.log.pop(); };
+const cellDiver = (r, c) => G.divers.find(d => d.r === r && d.c === c) || null;
+const levelOf = o => G.levels ? G.levels[o] : (G.vsCpu && o === 1 ? G.level : null);   // G.levels only used for bot-vs-bot testing
+const isCpu = o => !!levelOf(o);
+const LEVELS = {
+  easy:   {icon:"🐠", name:"Easy",   blurb:"Swims about a bit aimlessly and misses chances. Great for learning the reef."},
+  medium: {icon:"🐬", name:"Medium", blurb:"Grabs pearls, banks them and bumps you when it gets the chance."},
+  hard:   {icon:"🦈", name:"Hard",   blurb:"Races you for the golden chest, hunts your carriers and plans both dice ahead."}
+};
+// The chest is heavy: whenever its carrier moves, each die counts for half (rounded up)
+const budgetFor = (dv, v) => dv.carry === "chest" ? Math.ceil(v / 2) : v;
+
+/* ---------- MOVEMENT ---------- */
+function computeReach(dv, budget){
+  const key = (r, c) => r * N + c, start = key(dv.r, dv.c);
+  const best = new Map([[start, 0]]), queue = [[dv.r, dv.c, 0]];
+  while (queue.length){
+    queue.sort((a, b) => a[2] - b[2]);
+    const [r, c, d] = queue.shift();
+    if (d > best.get(key(r, c))) continue;
+    if (!(r === dv.r && c === dv.c) && cellDiver(r, c)) continue;   // enemy diver: stop here, can't swim through
+    for (const [dr, dc] of DIRS){
+      const nr = r + dr, nc = c + dc;
+      if (nr < 0 || nc < 0 || nr >= N || nc >= N) continue;
+      const t = T(nr, nc); if (t === "R") continue;
+      const cost = d + (t === "K" ? 2 : 1); if (cost > budget) continue;
+      const occ = cellDiver(nr, nc);
+      if (occ){ if (occ.owner === dv.owner) continue; if (isHome(occ.owner, occ.r, occ.c)) continue; }
+      const k = key(nr, nc);
+      if (best.has(k) && best.get(k) <= cost) continue;
+      best.set(k, cost); queue.push([nr, nc, cost]);
+    }
+  }
+  const out = new Map();
+  best.forEach((cost, k) => {
+    if (k === start) return;
+    const r = Math.floor(k / N), c = k % N;
+    if (dv.carry && G.items[r][c]) return;       // hands full: can't stop on loot
+    out.set(r + "," + c, cost);
+  });
+  return out;
+}
+function sendHome(dv){
+  const pref = START_COLS[dv.id % DIVERS];
+  const order = [...Array(N).keys()].sort((a, b) => Math.abs(a - pref) - Math.abs(b - pref));
+  for (const k of order){
+    const [r, c] = dv.owner === 0 ? [N - 1, k] : dv.owner === 1 ? [0, k] :
+      dv.owner === 2 ? [k, 0] : [k, N - 1];
+    if (!G.divers.some(x => x !== dv && x.r === r && x.c === c)){ dv.r = r; dv.c = c; return; }
+  }
+}
+function dropItem(r, c, item){
+  if (!G.items[r][c]){ G.items[r][c] = item; return; }
+  for (const [dr, dc] of DIRS){
+    const nr = r + dr, nc = c + dc;
+    if (nr >= 0 && nc >= 0 && nr < N && nc < N && T(nr, nc) !== "R" && !G.items[nr][nc]){ G.items[nr][nc] = item; return; }
+  }
+}
+function bump(target, msgs){
+  if (target.carry){
+    dropItem(target.r, target.c, target.carry);
+    msgs.push(G.names[target.owner] + " drops " + (target.carry === "chest" ? "the chest" : "a pearl") + "!");
+    target.carry = null;
+  }
+  FX.bump.add(target.id);
+  sendHome(target);
+  msgs.push(G.names[target.owner] + "'s diver " + target.label + " is bumped home.");
+}
+function bankIfHome(dv, msgs){
+  if (!(dv.carry && isHome(dv.owner, dv.r, dv.c))) return;
+  const who = G.names[dv.owner], v = val(dv.carry);
+  G.score[dv.owner] += v; dv.carry = null;
+  msgs.push(who + " banks " + v + " point" + (v > 1 ? "s" : "") + "!");
+  if (v === 2 && !G.chestClaimed){ G.chestClaimed = true; msgs.push("The chest is claimed. Tide tokens may start drifting into the reef."); }
+  // Tiebreaker: everything is banked and it's 4-4, so a fresh chest surfaces in the middle
+  const loose = G.items.some(row => row.some(x => x)) || G.divers.some(x => x.carry);
+  if (G.playerCount === 2 && !G.tieChest && G.score[0] === WIN - 1 && G.score[1] === WIN - 1 && !loose){
+    G.tieChest = true; G.items[MID][MID] = "chest";
+    msgs.push("Tied " + (WIN - 1) + "-" + (WIN - 1) + "! A new golden chest surfaces in the middle of the reef!");
+  }
+}
+function applyMove(dv, r, c){
+  const msgs = [], who = G.names[dv.owner];
+  const occ = cellDiver(r, c);
+  if (occ && occ !== dv) bump(occ, msgs);
+  dv.r = r; dv.c = c;
+  if (T(r, c) === "W"){
+    const other = WHIRLS.find(w => !(w[0] === r && w[1] === c));
+    const o2 = cellDiver(other[0], other[1]);
+    if (!o2 || (o2.owner !== dv.owner && !isHome(o2.owner, o2.r, o2.c))){
+      if (o2) bump(o2, msgs);
+      dv.r = other[0]; dv.c = other[1]; FX.whirl.add(dv.id);
+      msgs.push(who + "'s diver " + dv.label + " is swept through the whirlpool!");
+    }
+  }
+  const it = G.items[dv.r][dv.c];
+  if (!dv.carry && it){
+    dv.carry = it; G.items[dv.r][dv.c] = null;
+    msgs.push(who + " grabs " + (it === "chest" ? "the golden chest" : "a pearl") + "!");
+  }
+  if (G.tideTile && G.tideTile.r === dv.r && G.tideTile.c === dv.c){
+    if (G.tide[dv.owner] < TIDE_MAX){
+      G.tide[dv.owner]++; G.tideTile = null; FX.tidePick = dv.owner;
+      msgs.push(who + " grabs a tide token! (" + G.tide[dv.owner] + " held)");
+    } else msgs.push(who + " already holds " + TIDE_MAX + " tide tokens, so this one stays put.");
+  }
+  bankIfHome(dv, msgs);
+  return msgs;
+}
+
+/* ---------- TURN FLOW (no DOM in here) ---------- */
+function myDivers(){ return G.divers.filter(d => d.owner === G.turn); }
+function dieHasMove(i){
+  const v = G.dice[i].v;
+  return myDivers().some(dv => computeReach(dv, budgetFor(dv, v)).size > 0);
+}
+const rollDice = () => Array.from({length:DICE}, () => 1 + Math.floor(Math.random() * 6));
+const listVals = vs => vs.length < 2 ? vs.join("") : vs.slice(0, -1).join(", ") + " and " + vs[vs.length - 1];
+function hasMatch(){ const n = {}; G.dice.forEach(d => n[d.v] = (n[d.v] || 0) + 1); return G.dice.length === DICE && Object.values(n).some(x => x >= MATCH); }
+function roll(){
+  const vs = rollDice();
+  G.dice = vs.map(v => ({v, used:false}));
+  G.phase = "move"; G.sel = {die:null, diver:null}; FX.roll = true;
+  log(G.names[G.turn] + " rolls " + listVals(vs) + ".");
+  advance();
+}
+function advance(){
+  if (G.over) return;
+  const unused = G.dice.map((_, i) => i).filter(i => !G.dice[i].used);
+  if (!unused.length) return endTurn();
+  const movable = unused.filter(dieHasMove);
+  if (!movable.length){
+    log(G.names[G.turn] + " has no legal moves. Dice forfeited.");
+    G.dice.forEach(d => d.used = true);
+    return endTurn();
+  }
+  if (G.sel.die === null || G.dice[G.sel.die].used || !movable.includes(G.sel.die)) G.sel.die = movable[0];
+  if (G.sel.diver && computeReach(G.sel.diver, budgetFor(G.sel.diver, G.dice[G.sel.die].v)).size === 0) G.sel.diver = null;
+}
+function finishTurn(){
+  G.turn = (G.turn + 1) % G.playerCount; G.turnsDone++; G.rerolled = false;
+  if (G.chestClaimed && !G.tideTile && Math.random() < TIDE_CHANCE) spawnTide();
+  if (G.turnsDone === 4 && !G.chestSpawned){
+    G.chestSpawned = true; CHEST_SPOTS.forEach(([r, c]) => { G.items[r][c] = "chest"; });
+    log(CHEST_SPOTS.length > 1 ? "Two golden chests surface in the middle of the reef!" : "The golden chest surfaces in the middle of the reef!");
+  }
+  G.dice = []; G.phase = "roll"; G.sel = {die:null, diver:null};
+}
+function endTurn(){
+  const dbl = hasMatch();
+  if (dbl && (!G.rerolled || myDivers().some(m => swapTargets(m).length))){
+    G.phase = "swap"; G.sel = {die:null, diver:null};
+    log((BIG ? "Triple! " : "Doubles! ") + G.names[G.turn] + " may swap places with an opponent" + (G.rerolled ? " or end the turn." : " or roll again."));
+    return;
+  }
+  finishTurn();
+}
+function rollAgain(){
+  G.rerolled = true;
+  log(G.names[G.turn] + " rolls again!");
+  G.dice = []; G.phase = "roll"; G.sel = {die:null, diver:null};
+}
+// any eligible rival (opponents on their home row are safe; never hand a rival a free bank)
+function swapTargets(m){
+  return G.divers.filter(e => e.owner !== m.owner && !isHome(e.owner, e.r, e.c) && !(e.carry && isHome(e.owner, m.r, m.c)));
+}
+function doSwap(m, e){
+  const msgs = [], r = m.r, c = m.c;
+  m.r = e.r; m.c = e.c; e.r = r; e.c = c;
+  log(G.names[m.owner] + "'s diver " + m.label + " swaps places with " + G.names[e.owner] + "'s diver " + e.label + ".");
+  bankIfHome(m, msgs); msgs.forEach(log);
+  if (G.score[m.owner] >= WIN){ G.over = true; G.winner = m.owner; G.dice = []; return; }
+  finishTurn();
+}
+function useTide(){
+  if (G.phase !== "move" || !G.tide[G.turn] || G.dice.some(d => d.used)) return;
+  G.tide[G.turn]--;
+  const vs = rollDice();
+  G.dice = vs.map(v => ({v, used:false})); G.sel = {die:null, diver:null}; FX.roll = true;
+  log(G.names[G.turn] + " spends a tide token and rerolls: " + listVals(vs) + ".");
+  advance();
+}
+
+function doMove(dv, r, c){
+  let an = null;
+  if (typeof SET !== "undefined" && SET.analyst){ try { an = analyzeMove(dv, r, c, G.sel.die); } catch (e) { an = null; } }
+  G.dice[G.sel.die].used = true;
+  const msgs = applyMove(dv, r, c);
+  log(G.names[dv.owner] + " moves diver " + dv.label + ".");
+  msgs.forEach(log);
+  if (an){
+    G.last = Object.assign({owner:dv.owner}, an); G.stats[dv.owner].push(an.rating);
+    log("🔍 " + G.names[dv.owner] + "'s move: " + an.rating + "/100 (" + an.label + ").");
+  }
+  if (G.score[dv.owner] >= WIN){ G.over = true; G.winner = dv.owner; G.dice = []; return; }
+  G.sel = {die:null, diver:null};
+  advance();
+}
+
+/* ---------- COMPUTER PLAYER ---------- */
+function evalMove(dv, r, c){
+  const o = dv.owner, hr = homeRow(o);
+  let s = 0;
+  const target = cellDiver(r, c);
+  if (target && target !== dv){
+    s += 30 + (target.carry ? (target.carry === "chest" ? 90 : 60) : 0) + Math.abs(target.r - homeRow(target.owner)) * 2;
+  }
+  const item = G.items[r][c];
+  if (!dv.carry && item) s += item === "chest" ? 55 : 40;
+  if (dv.carry && isHome(o, r, c)) return s + 100 * val(dv.carry);
+  if (dv.carry){
+    s += (Math.abs(dv.r - hr) - Math.abs(r - hr)) * 6;
+    const threat = G.divers.some(x => x.owner !== o && Math.abs(x.r - r) + Math.abs(x.c - c) <= 3 && !isHome(x.owner, x.r));
+    if (threat) s -= 15;
+  } else if (!item){
+    const goals = [];
+    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) if (G.items[i][j]) goals.push([i, j]);
+    G.divers.forEach(x => { if (x.owner !== o && x.carry) goals.push([x.r, x.c]); });
+    const nd = (a, b) => goals.length ? Math.min(...goals.map(g => Math.abs(g[0] - a) + Math.abs(g[1] - b))) : 0;
+    s += (nd(dv.r, dv.c) - nd(r, c)) * 3;
+    if (isHome(o, r, c)) s -= 6;
+  }
+  return s;
+}
+function aiChoose(){
+  let best = null;
+  G.dice.forEach((d, i) => {
+    if (d.used) return;
+    myDivers().forEach(dv => {
+      computeReach(dv, budgetFor(dv, d.v)).forEach((_, k) => {
+        const [r, c] = k.split(",").map(Number);
+        const s = evalMove(dv, r, c) + Math.random() * 2;
+        if (!best || s > best.s) best = {s, i, dv, r, c};
+      });
+    });
+  });
+  return best;
+}
+function aiSwapChoose(){
+  const goalDist = (a, b) => { let m = 99; for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) if (G.items[i][j]) m = Math.min(m, Math.abs(i - a) + Math.abs(j - b)); return m === 99 ? 0 : m; };
+  let best = null;
+  myDivers().forEach(m => swapTargets(m).forEach(e => {
+    const hrM = homeRow(m.owner), hrE = homeRow(e.owner);
+    let sc = 0;
+    if (m.carry){ sc += (Math.abs(m.r - hrM) - Math.abs(e.r - hrM)) * 6; if (isHome(m.owner, e.r)) sc += 100 * val(m.carry); }
+    else sc += (goalDist(m.r, m.c) - goalDist(e.r, e.c)) * 3;
+    if (e.carry) sc += (Math.abs(m.r - hrE) - Math.abs(e.r - hrE)) * 6;
+    if (!best || sc > best.s) best = {s:sc, m, e};
+  }));
+  return best;
+}
+/* ----- easy: wanders a lot, only sometimes spots a good move ----- */
+function allMoves(){
+  const out = [];
+  G.dice.forEach((d, i) => { if (d.used) return;
+    myDivers().forEach(dv => computeReach(dv, budgetFor(dv, d.v)).forEach((_, k) => { const [r, c] = k.split(",").map(Number); out.push({i, dv, r, c}); })); });
+  return out;
+}
+function aiChooseEasy(){
+  const all = allMoves(); if (!all.length) return null;
+  if (Math.random() < .45) return all[Math.floor(Math.random() * all.length)];
+  let best = null;
+  all.forEach(m => { const sc = evalMove(m.dv, m.r, m.c) + Math.random() * 40; if (!best || sc > best.s) best = Object.assign({s:sc}, m); });
+  return best;
+}
+
+/* ----- hard: tries every way to spend BOTH dice, then judges the resulting position ----- */
+function snapG(){ return {d:G.divers.map(x => [x.r, x.c, x.carry]), items:G.items.map(r => r.slice()), score:G.score.slice(), tie:G.tieChest,
+  tide:G.tide.slice(), tideTile:G.tideTile ? {...G.tideTile} : null, chestClaimed:G.chestClaimed, fb:[...FX.bump], fw:[...FX.whirl], tidePick:FX.tidePick}; }
+function restoreG(sn){
+  G.divers.forEach((x, i) => { x.r = sn.d[i][0]; x.c = sn.d[i][1]; x.carry = sn.d[i][2]; });
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) G.items[r][c] = sn.items[r][c];
+  G.score = sn.score.slice(); G.tieChest = sn.tie; G.tide = sn.tide.slice();
+  G.tideTile = sn.tideTile ? {...sn.tideTile} : null; G.chestClaimed = sn.chestClaimed;
+  FX.bump.clear(); sn.fb.forEach(x => FX.bump.add(x)); FX.whirl.clear(); sn.fw.forEach(x => FX.whirl.add(x)); FX.tidePick = sn.tidePick;
+}
+const manh = (a, b, c, d) => Math.abs(a - c) + Math.abs(b - d);
+function sideEval(o){
+  const mine = G.divers.filter(d => d.owner === o), theirs = G.divers.filter(d => d.owner !== o);
+  const hd = d => Math.abs(d.r - homeRow(d.owner));
+  let sc = G.score[o] * 120;
+  mine.forEach(d => {
+    if (d.carry){                                           // loot in hand: worth more the closer to home, much less if rivals are near
+      const v = val(d.carry);
+      sc += v * (30 + 4 * (N - 1 - hd(d)));
+      let danger = 0;
+      theirs.forEach(e => { const dd = manh(e.r, e.c, d.r, d.c); if (dd <= 7) danger += (8 - dd) / 7; });
+      sc -= danger * v * 30;
+    } else sc += hd(d) * 1.5;                               // being out on the reef beats sitting at home
+  });
+  const free = mine.filter(d => !d.carry);
+  const near = (r, c) => { let m = 99; free.forEach(d => { m = Math.min(m, manh(d.r, d.c, r, c)); }); return m; };
+  const pull = (r, c, w) => { const m = near(r, c); return m === 99 ? 0 : w * 30 / (1 + Math.max(1, m) * .35); };
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++){ const it = G.items[r][c]; if (it) sc += pull(r, c, it === "chest" ? 3.2 : 1); }   // the chest counts triple
+  if (!G.chestSpawned) CHEST_SPOTS.forEach(([cr, cc]) => { sc += pull(cr, cc, 3.2); });          // the chest is about to surface: get a diver ready beside it
+  theirs.forEach(e => { if (e.carry && !isHome(e.owner, e.r, e.c)){ const m = near(e.r, e.c); if (m < 99) sc += val(e.carry) * 26 / (1 + m * .4); } });   // hunt rival carriers
+  return sc;
+}
+const posEval = o => G.score[o] >= WIN ? 1e6 : sideEval(o) - sideEval(1 - o);
+function legalMoves(o, v){
+  const out = [];
+  G.divers.filter(d => d.owner === o).forEach(dv => computeReach(dv, budgetFor(dv, v)).forEach((_, k) => { const [r, c] = k.split(",").map(Number); out.push({dv, r, c}); }));
+  return out;
+}
+const bumpsIn = msgs => msgs.filter(m => m.indexOf("bumped") >= 0).length;
+const ATTACK = 28;                                          // hard bot loves a good bump
+function planBest(o, vals){
+  const base = snapG(); let best = null;
+  const seqs = vals.length === 2 ? (vals[0] === vals[1] ? [[0, 1]] : [[0, 1], [1, 0]]) : [[0]];
+  seqs.forEach(seq => {
+    const firsts = [];
+    legalMoves(o, vals[seq[0]]).forEach(m => {
+      const bm = bumpsIn(applyMove(m.dv, m.r, m.c));
+      firsts.push({m, bm, v:posEval(o) + bm * ATTACK});
+      restoreG(base);
+    });
+    firsts.sort((a, b) => b.v - a.v);
+    firsts.slice(0, seq.length === 2 ? 12 : firsts.length).forEach(f => {
+      let total = f.v;
+      if (seq.length === 2){
+        applyMove(f.m.dv, f.m.r, f.m.c);
+        if (G.score[o] >= WIN) total = 1e6;
+        else {
+          const mid = snapG(); let b2 = -1e9;
+          legalMoves(o, vals[seq[1]]).forEach(m2 => {
+            const bm2 = bumpsIn(applyMove(m2.dv, m2.r, m2.c));
+            const v2 = posEval(o) + (f.bm + bm2) * ATTACK;
+            restoreG(mid);
+            if (v2 > b2) b2 = v2;
+          });
+          if (b2 > -1e9) total = b2;                        // (no second move possible: keep the first on its own)
+        }
+        restoreG(base);
+      }
+      total += Math.random() * .5;
+      if (!best || total > best.value) best = {value:total, die:seq[0], dv:f.m.dv, r:f.m.r, c:f.m.c};
+    });
+  });
+  restoreG(base);
+  return best;
+}
+/* with many dice, plan one move at a time (best single move by resulting position) */
+function planGreedy(o, vals){
+  const base = snapG(); let best = null; const seen = new Set();
+  vals.forEach((v, idx) => {
+    if (seen.has(v)) return; seen.add(v);
+    legalMoves(o, v).forEach(m => {
+      const bm = bumpsIn(applyMove(m.dv, m.r, m.c));
+      const val2 = (G.score[o] >= WIN ? 1e6 : posEval(o)) + bm * ATTACK + Math.random() * .5;
+      restoreG(base);
+      if (!best || val2 > best.value) best = {value:val2, die:idx, dv:m.dv, r:m.r, c:m.c};
+    });
+  });
+  restoreG(base);
+  return best;
+}
+/* ---------- MOVE ANALYST ("engine") ----------
+   Before a move is played, every legal alternative is scored with the same position evaluator the hard bot uses
+   (with a look-ahead of the second die in the classic game). The move's rating compares it with the best one:
+   100 = as good as the best move, falling off as the evaluation gap grows. State is snapshotted and restored. */
+const TIERS = [[100, "Best move", "#47d18c"], [90, "Excellent", "#47d18c"], [75, "Good", "#9be15d"], [55, "Okay", "#ffd45c"],
+               [35, "Inaccuracy", "#ff9f1c"], [15, "Mistake", "#ff7a5c"], [0, "Blunder", "#ff5c7a"]];
+const RATE_SCALE = 40;
+function analyzeMove(dv, r, c, dieIdx){
+  const o = dv.owner, base = snapG();
+  const unused = G.dice.map((_, i) => i).filter(i => !G.dice[i].used);
+  const deep = !BIG && unused.length === 2;
+  const desc = (m, v) => "diver " + m.dv.label + " to row " + (m.r + 1) + ", column " + (m.c + 1) + " (die " + v + ")";
+  const playedV = G.dice[dieIdx].v, seen = new Set(), cands = [];
+  unused.forEach(i => {
+    const v = G.dice[i].v; if (seen.has(v)) return; seen.add(v);
+    const other = unused.find(x => x !== i);
+    legalMoves(o, v).forEach(m => {
+      const text = desc(m, v), isPlayed = v === playedV && m.dv === dv && m.r === r && m.c === c;
+      const bm = bumpsIn(applyMove(m.dv, m.r, m.c));
+      let val;
+      if (G.score[o] >= WIN) val = 1e6;
+      else {
+        val = posEval(o) + bm * ATTACK;
+        if (deep){
+          const mid = snapG(); let b2 = -1e9;
+          legalMoves(o, G.dice[other].v).forEach(m2 => {
+            const bm2 = bumpsIn(applyMove(m2.dv, m2.r, m2.c));
+            const v2 = (G.score[o] >= WIN ? 1e6 : posEval(o)) + (bm + bm2) * ATTACK;
+            restoreG(mid);
+            if (v2 > b2) b2 = v2;
+          });
+          if (b2 > -1e9) val = b2;
+        }
+      }
+      restoreG(base);
+      cands.push({v:val, text, isPlayed, win:val >= 1e6});
+    });
+  });
+  restoreG(base);
+  const best = cands.reduce((a, b) => b.v > a.v ? b : a, cands[0]);
+  const played = cands.find(x => x.isPlayed) || best;
+  const loss = Math.max(0, best.v - played.v);
+  let rating = loss < 0.5 ? 100 : Math.round(100 * Math.exp(-loss / RATE_SCALE));
+  rating = Math.max(1, Math.min(100, rating));
+  const tier = TIERS.find(t => rating >= t[0]);
+  return {rating, label:tier[1], color:tier[2], played:played.text, best:best.text, isBest:loss < 0.5,
+          missedWin:best.win && !played.win, alts:cands.length};
+}
+
+function aiSwapHard(){
+  const o = G.turn, base = snapG(), b0 = posEval(o); let best = null;
+  myDivers().forEach(m => swapTargets(m).forEach(e => {
+    const r = m.r, c = m.c; m.r = e.r; m.c = e.c; e.r = r; e.c = c;
+    bankIfHome(m, []);
+    const gain = posEval(o) - b0;
+    restoreG(base);
+    if (!best || gain > best.s) best = {s:gain, m, e};
+  }));
+  return best;
+}
+
+function aiStep(){
+  if (G.over || !isCpu(G.turn)) return;
+  const lvl = levelOf(G.turn);
+  if (G.phase === "roll") roll();
+  else if (G.phase === "swap"){
+    if (lvl === "hard"){
+      const sw = aiSwapHard();
+      if (sw && sw.s >= (G.rerolled ? 4 : 45)) doSwap(sw.m, sw.e); else if (G.rerolled) finishTurn(); else rollAgain();
+    } else {
+      const sw = aiSwapChoose();
+      if (sw && sw.s >= 6 && (lvl !== "easy" || Math.random() < .4)) doSwap(sw.m, sw.e); else if (G.rerolled) finishTurn(); else rollAgain();
+    }
+  }
+  else if (lvl === "hard"){
+    const o = G.turn, ids = G.dice.map((_, i) => i).filter(i => !G.dice[i].used), vals = ids.map(i => G.dice[i].v);
+    const plan = vals.length === 2 ? planBest(o, vals) : planGreedy(o, vals);
+    if (G.tide[o] && !G.dice.some(d => d.used)){            // spend the tide token only when the dice are poor
+      const pips = vals.reduce((a, b) => a + b, 0) * 2 / Math.max(1, vals.length), gain = plan ? plan.value - posEval(o) : -99;
+      if (!plan || pips <= 4 || (gain < 10 && pips <= 8)){ useTide(); update(); return; }
+    }
+    if (plan){ G.sel.die = ids[plan.die]; doMove(plan.dv, plan.r, plan.c); } else { G.dice.forEach(d => d.used = true); endTurn(); }
+  }
+  else {
+    if (G.tide[G.turn] && !G.dice.some(d => d.used)){
+      const m0 = lvl === "easy" ? null : aiChoose();
+      if (lvl === "easy" ? Math.random() < .08 : (!m0 || m0.s < 8)){ useTide(); update(); return; }
+    }
+    const m = lvl === "easy" ? aiChooseEasy() : aiChoose();
+    if (m){ G.sel.die = m.i; doMove(m.dv, m.r, m.c); } else { G.dice.forEach(d => d.used = true); endTurn(); }
+  }
+  update();
+}
+function maybeAi(){
+  clearTimeout(aiTimer);
+  if (!G || G.over || !isCpu(G.turn)) return;
+  aiTimer = setTimeout(aiStep, Math.max(G.phase === "roll" ? 700 : 850, fxBusyUntil - performance.now() + 150));
+}
+
+/* ---------- RENDERING ---------- */
+const SVG = {
+  kelp: '<svg viewBox="0 0 40 40"><g fill="none" stroke="#7ee0a6" stroke-width="3" stroke-linecap="round"><path d="M10 38 Q4 28 10 20 Q16 12 10 4"/><path d="M20 38 Q14 28 20 20 Q26 12 20 4"/><path d="M30 38 Q24 28 30 20 Q36 12 30 4"/></g></svg>',
+  rock: '<svg viewBox="0 0 40 40"><polygon points="6,34 10,16 20,8 31,14 35,34" fill="#8da0b3"/><polygon points="20,8 31,14 35,34 22,34" fill="#6f8397"/></svg>',
+  whirl: '<svg viewBox="0 0 40 40"><g class="spin"><path d="M20 20 m0 0 a3 3 0 0 1 6 0 a8 8 0 0 1 -16 0 a13 13 0 0 1 26 0 a18 18 0 0 1 -36 0" fill="none" stroke="#d9f3ff" stroke-width="2.4" stroke-linecap="round" opacity=".9"/></g></svg>',
+  pearl: '<svg viewBox="0 0 40 40"><defs><radialGradient id="pg" cx="35%" cy="30%"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#e5b9d6"/></radialGradient></defs><circle cx="20" cy="22" r="9" fill="url(#pg)" stroke="#fff" stroke-opacity=".7"/></svg>',
+  chest: '<svg viewBox="0 0 40 40"><rect x="7" y="14" width="26" height="18" rx="3" fill="#f2b632" stroke="#8a5a00" stroke-width="2"/><rect x="7" y="14" width="26" height="7" rx="3" fill="#ffd45c" stroke="#8a5a00" stroke-width="2"/><rect x="17.5" y="19" width="5" height="6" rx="1" fill="#8a5a00"/></svg>'
+};
+function diverSvg(dv){
+  const col = COLOR[dv.owner];
+  let s = '<svg class="dvr" viewBox="0 0 40 40"><circle cx="20" cy="20" r="14" fill="' + col + '" stroke="#06223a" stroke-width="2.5"/>' +
+          '<ellipse cx="20" cy="18" rx="9" ry="7" fill="#0b3a5c"/><ellipse cx="17" cy="16" rx="3" ry="2" fill="#bfe6ff" opacity=".8"/>' +
+          '<text x="20" y="35" text-anchor="middle" font-size="9" font-weight="800" fill="#06223a" font-family="sans-serif">' + dv.label + '</text>';
+  if (dv.carry === "pearl") s += '<circle cx="31" cy="30" r="6" fill="#fff" stroke="#06223a" stroke-width="1.5"/>';
+  if (dv.carry === "chest") s += '<rect x="25" y="25" width="12" height="9" rx="2" fill="#ffd45c" stroke="#06223a" stroke-width="1.5"/>';
+  return s + '</svg>';
+}
+/* ---------- ANIMATIONS (visual only; never touches game state) ---------- */
+const TAP = (window.matchMedia && matchMedia("(pointer:coarse)").matches) ? "Tap" : "Click";
+/* ---------- SETTINGS (saved on this device) ---------- */
+const SET = {sound:true, quick:false, limit:false, hidden:false, analyst:true};
+try {
+  const saved = JSON.parse(localStorage.getItem("reefSettings"));
+  if (saved) Object.keys(SET).forEach(k => { if (typeof saved[k] === "boolean") SET[k] = saved[k]; });
+  else if (localStorage.getItem("reefMuted") === "1") SET.sound = false;      // carry over the old mute button's choice
+} catch (e) {}
+const REDUCE_OS = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+let REDUCE = REDUCE_OS || SET.limit;                                          // true = skip motion (OS setting or the Limit animations switch)
+document.documentElement.classList.toggle("limit", REDUCE);
+const rnd = (a, b) => a + Math.random() * (b - a);
+function fxEl(cls, x, y, content, css){
+  const e = document.createElement("div");
+  e.className = "fxp " + cls; e.style.left = x + "px"; e.style.top = y + "px";
+  if (content != null) e.textContent = content;
+  if (css) e.style.cssText += ";" + css;
+  $("fxlayer").appendChild(e); return e;
+}
+function fxRun(e, frames, opts){
+  const a = e.animate(frames, Object.assign({fill:"both"}, opts));
+  a.onfinish = () => e.remove(); return a;
+}
+function bubbleAt(x, y, delay){
+  const z = rnd(5, 11);
+  const e = fxEl("fxbub", x + rnd(-6, 6), y + rnd(-4, 8), null, "width:" + z + "px;height:" + z + "px");
+  fxRun(e, [{transform:"translate(0,0) scale(.5)", opacity:0}, {opacity:.9, offset:.2},
+            {transform:"translate(" + rnd(-8, 8) + "px," + rnd(-34, -20) + "px) scale(1.1)", opacity:0}], {duration:rnd(600, 900), delay:delay || 0});
+}
+function burst(x, y, emojis, n, opt){
+  opt = opt || {};
+  for (let i = 0; i < n; i++){
+    const ang = (i / n) * Math.PI * 2 + rnd(-.3, .3), d = rnd(.6, 1) * (opt.dist || 70);
+    const e = fxEl("", x, y, emojis[i % emojis.length], "font-size:" + rnd(14, 24) + "px");
+    fxRun(e, [{transform:"translate(0,0) scale(.3) rotate(0)", opacity:0},
+              {opacity:1, offset:.15},
+              {transform:"translate(" + Math.cos(ang) * d + "px," + (Math.sin(ang) * d - 14) + "px) scale(1.1) rotate(" + rnd(-120, 120) + "deg)", opacity:1, offset:.6},
+              {transform:"translate(" + Math.cos(ang) * d * 1.15 + "px," + (Math.sin(ang) * d + 24) + "px) scale(.7) rotate(" + rnd(-200, 200) + "deg)", opacity:0}],
+            {duration:opt.dur || 1100, delay:opt.delay || 0, easing:"ease-out"});
+  }
+}
+function ringAt(x, y, size, delay, color){
+  const e = fxEl("fxring", x, y, null, "width:" + size + "px;height:" + size + "px" + (color ? ";border-color:" + color + ";box-shadow:0 0 14px " + color : ""));
+  fxRun(e, [{transform:"scale(.2)", opacity:1}, {transform:"scale(2.4)", opacity:0}], {duration:800, delay:delay || 0, easing:"ease-out"});
+}
+function floatText(x, y, text, color, delay){
+  const e = fxEl("fxtxt", x, y, text, "color:" + color);
+  fxRun(e, [{transform:"translateY(0) scale(.4)", opacity:0}, {transform:"translateY(-22px) scale(1.4)", opacity:1, offset:.25},
+            {transform:"translateY(-70px) scale(1)", opacity:0}], {duration:1300, delay:delay || 0, easing:"ease-out"});
+}
+/* ---------- SOUND (synthesised with Web Audio, no files needed) ---------- */
+const SFX = (() => {
+  let ctx = null, master = null, noise = null, muted = !SET.sound;
+  function ensure(){
+    if (!ctx){
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      ctx = new AC(); master = ctx.createGain(); master.gain.value = .5; master.connect(ctx.destination);
+      noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+      const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      ctx.onstatechange = () => { if (ambWant) startAmbient(); };      // sound just got unlocked: start the ambient bubbles if we're waiting
+    }
+    if (ctx.state === "suspended") ctx.resume();
+    return ctx;
+  }
+  function tone(f, at, dur, type, vol, to){
+    const o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime + at;
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur);
+    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + Math.min(.02, dur / 3));
+    g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + .05);
+  }
+  function whoosh(at, dur, f0, f1, f2, vol, type){
+    const src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(), t = ctx.currentTime + at;
+    src.buffer = noise; src.loop = true; f.type = type || "bandpass"; f.Q.value = 1.4;
+    f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + dur * .5); f.frequency.exponentialRampToValueAtTime(f2, t + dur);
+    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + dur * .35); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    src.connect(f); f.connect(g); g.connect(master); src.start(t); src.stop(t + dur + .05);
+  }
+  const play = fn => (...a) => { if (muted) return; try { if (ensure()) fn(...a); } catch (e) {} };
+
+  /* ----- background music: a slow, generative underwater score (soft pads, glassy bells, distant whale calls) ----- */
+  const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+  // D → Bm → G → A, eight seconds each: [bass, ...pad notes] as MIDI numbers
+  const CHORDS = [[38, 50, 54, 57, 61, 64], [47, 50, 54, 57, 59, 61], [43, 50, 55, 59, 62, 66], [45, 52, 57, 59, 61, 66]];
+  const BELLS = [66, 69, 71, 74, 76, 78, 81, 83, 86];       // D-major pentatonic-ish, so anything that rings sounds fine
+  let music = null;
+  function pv(dest, f, t, dur, vol, det){                     // pad voice: slow swell in, hold, slow fade out
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = "triangle"; o.frequency.value = f; o.detune.value = det || 0;
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 3);
+    g.gain.setValueAtTime(vol, t + dur - 3); g.gain.linearRampToValueAtTime(0, t + dur);
+    o.connect(g); g.connect(dest); o.start(t); o.stop(t + dur + .1);
+  }
+  function chord(t, i){
+    const c = CHORDS[i % CHORDS.length];
+    pv(music.pad, mtof(c[0]), t, 11, .075, 0);
+    for (let k = 1; k < c.length; k++){ pv(music.pad, mtof(c[k]), t, 11, .026, -7); pv(music.pad, mtof(c[k]), t, 11, .026, 7); }
+  }
+  function bell(t){
+    if (Math.random() < .25) return;                          // leave some silence
+    const f = mtof(BELLS[Math.floor(Math.random() * BELLS.length)]);
+    [[f, 2.6, .06], [f * 2.01, 1.2, .014]].forEach(([hz, dur, vol]) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = "sine"; o.frequency.value = hz;
+      g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + .01); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+      o.connect(g); g.connect(music.bells); o.start(t); o.stop(t + dur + .1);
+    });
+  }
+  function whale(t){
+    const o = ctx.createOscillator(), g = ctx.createGain(), f0 = rnd(140, 190);
+    o.type = "sine"; o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(f0 * 1.5, t + 2.2); o.frequency.exponentialRampToValueAtTime(f0 * .7, t + 6);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.06, t + 2); g.gain.linearRampToValueAtTime(0, t + 6);
+    o.connect(g); g.connect(music.pad); o.start(t); o.stop(t + 6.1);
+  }
+  function startMusic(){
+    if (!ctx || music) return;
+    const now = ctx.currentTime;
+    const out = ctx.createGain(); out.gain.setValueAtTime(.0001, now); out.gain.exponentialRampToValueAtTime(.55, now + 3); out.connect(master);
+    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 850; lp.Q.value = .4; lp.connect(out);
+    const lfo = ctx.createOscillator(), lg = ctx.createGain();          // slow "current" sweeping the filter
+    lfo.frequency.value = .06; lg.gain.value = 280; lfo.connect(lg); lg.connect(lp.frequency); lfo.start();
+    const dly = ctx.createDelay(1.5), fb = ctx.createGain(), dl = ctx.createBiquadFilter(), wet = ctx.createGain();   // watery echo
+    dly.delayTime.value = .46; fb.gain.value = .42; dl.type = "lowpass"; dl.frequency.value = 1600; wet.gain.value = .5;
+    dly.connect(dl); dl.connect(fb); fb.connect(dly); dl.connect(wet); wet.connect(out);
+    const pad = ctx.createGain(); pad.connect(lp); lp.connect(dly);
+    const bells = ctx.createGain(); bells.connect(out); bells.connect(dly);
+    music = { out, lfo, pad, bells, ci: 0, nextChord: now + .1, nextBell: now + 2.5, nextWhale: now + rnd(15, 30) };
+    const m = music;
+    m.timer = setInterval(() => {
+      if (music !== m || ctx.state !== "running") return;
+      const t = ctx.currentTime;
+      while (m.nextChord < t + 1.5){ chord(m.nextChord, m.ci++); m.nextChord += 8; }
+      while (m.nextBell < t + 1.5){ bell(m.nextBell); m.nextBell += rnd(.9, 2.4); }
+      if (m.nextWhale < t + 1.5){ whale(m.nextWhale); m.nextWhale += rnd(35, 70); }
+    }, 400);
+  }
+  function stopMusic(){
+    if (!music) return;
+    const m = music; music = null; clearInterval(m.timer);
+    try { const t = ctx.currentTime; m.out.gain.cancelScheduledValues(t); m.out.gain.setValueAtTime(Math.max(m.out.gain.value, .0001), t); m.out.gain.exponentialRampToValueAtTime(.0001, t + .8); } catch (e) {}
+    setTimeout(() => { try { m.lfo.stop(); m.out.disconnect(); } catch (e) {} }, 1000);
+  }
+
+  /* ----- ambient bubbles: quiet underwater hush with soft bubble blips, for the "Tap to dive in" screen ----- */
+  let amb = null, ambWant = false;
+  function ambBubble(t, out){
+    const n = Math.random() < .3 ? 2 + Math.floor(Math.random() * 3) : 1;      // sometimes a little cluster
+    for (let i = 0; i < n; i++){
+      const f = rnd(260, 820), at = t + i * rnd(.06, .12), dur = rnd(.08, .16);
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = "sine"; o.frequency.setValueAtTime(f, at); o.frequency.exponentialRampToValueAtTime(f * rnd(1.8, 2.6), at + dur);
+      g.gain.setValueAtTime(.0001, at); g.gain.exponentialRampToValueAtTime(rnd(.05, .11), at + .015); g.gain.exponentialRampToValueAtTime(.0001, at + dur);
+      o.connect(g); g.connect(out); o.start(at); o.stop(at + dur + .05);
+    }
+  }
+  function startAmbient(){
+    if (amb || muted || !ctx || ctx.state !== "running") return;
+    const now = ctx.currentTime;
+    const out = ctx.createGain(); out.gain.setValueAtTime(.0001, now); out.gain.exponentialRampToValueAtTime(1, now + 1.2); out.connect(master);
+    const src = ctx.createBufferSource(), lp = ctx.createBiquadFilter(), bed = ctx.createGain();   // faint water hush under the bubbles
+    src.buffer = noise; src.loop = true; lp.type = "lowpass"; lp.frequency.value = 420; bed.gain.value = .05;
+    src.connect(lp); lp.connect(bed); bed.connect(out); src.start();
+    const m = amb = {out, src, next:now + .2};
+    m.timer = setInterval(() => {
+      if (amb !== m || ctx.state !== "running") return;
+      const t = ctx.currentTime;
+      while (m.next < t + 1){ ambBubble(m.next, out); m.next += rnd(.3, 1.3); }
+    }, 300);
+  }
+  function stopAmbient(){
+    if (!amb) return;
+    const m = amb; amb = null; clearInterval(m.timer);
+    try { const t = ctx.currentTime; m.out.gain.cancelScheduledValues(t); m.out.gain.setValueAtTime(Math.max(m.out.gain.value, .0001), t); m.out.gain.exponentialRampToValueAtTime(.0001, t + .5); } catch (e) {}
+    setTimeout(() => { try { m.src.stop(); m.out.disconnect(); } catch (e) {} }, 700);
+  }
+
+  return {
+    get muted(){ return muted; },
+    set muted(v){
+      muted = v;
+      try { if (v){ stopMusic(); stopAmbient(); } else { ensure(); startMusic(); if (ambWant) startAmbient(); } } catch (e) {}
+    },
+    get live(){ return !!ctx && ctx.state === "running" && !muted; },        // sound can be heard right now
+    ambient(on){ ambWant = on; try { if (on){ ensure(); startAmbient(); } else stopAmbient(); } catch (e) {} },
+    unlock(){ try { ensure(); if (!muted) startMusic(); } catch (e) {} },
+    // resolves true if sound can start right away (or is muted); false if the browser is still waiting for a tap
+    ready(){ return new Promise(res => { try {
+      if (muted || !ensure() || ctx.state === "running") return res(true);
+      setTimeout(() => res(ctx.state === "running"), 250);
+    } catch (e) { res(true); } }); },
+    hidden(h){ try { if (ctx) h ? ctx.suspend() : ctx.resume(); } catch (e) {} },   // keep the music quiet while the tab is in the background
+    click: play(() => { tone(760, 0, .07, "triangle", .2, 430); tone(1140, .02, .05, "sine", .08, 800); }),
+    // soft water whoosh with a few bubble blips; length follows the swim animation
+    swim: play((dist, ms, delay) => {
+      const d = Math.max(.3, ms / 1000), at = (delay || 0) / 1000;
+      whoosh(at, d, 350, 1300, 500, .22);
+      for (let i = 0; i < 2 + dist; i++){
+        const f = rnd(500, 1000);
+        tone(f, at + rnd(0, d), rnd(.05, .09), "sine", .07, f * rnd(1.5, 2.2));
+      }
+    }),
+    bubbles: play(() => { whoosh(0, .9, 300, 900, 500, .12); for (let i = 0; i < 9; i++){ const f = rnd(350, 800); tone(f, rnd(0, .8), .09, "sine", .07, f * rnd(1.6, 2.4)); } }),
+    bump: play(delay => { const at = (delay || 0) / 1000; tone(170, at, .28, "sine", .45, 45); whoosh(at, .25, 900, 300, 120, .3, "lowpass"); }),
+    whirl: play(() => { whoosh(0, .95, 300, 1500, 300, .25); tone(300, 0, .9, "sine", .1, 900); tone(900, .45, .45, "sine", .08, 280); }),
+    score: play((gain, delay) => {
+      const at = (delay || 0) / 1000, big = gain > 1;
+      const notes = big ? [523.25, 659.25, 783.99, 1046.5, 1318.5, 1568] : [659.25, 783.99, 1046.5];
+      notes.forEach((f, i) => { tone(f, at + i * .09, .38, "triangle", .24); tone(f * 2, at + i * .09, .25, "sine", .06); });
+      for (let i = 0; i < (big ? 7 : 4); i++) tone(rnd(1800, 3200), at + .12 + rnd(0, .4), .08, "sine", .05);
+    }),
+    // title intro: deep swell + rising bubble blips as the logo floats up
+    titleRise: play(() => {
+      whoosh(0, 2.1, 180, 900, 1400, .2);
+      tone(98, 0, 2.2, "sine", .16, 196);
+      for (let i = 0; i < 18; i++){ const f = 380 + i * 55 + rnd(0, 90); tone(f, i * .1 + rnd(0, .06), rnd(.06, .1), "sine", .06, f * rnd(1.5, 2.2)); }
+    }),
+    // the logo settles: soft bloop, shimmering chord, sparkles
+    titleLand: play(() => {
+      tone(146.83, 0, .5, "sine", .35, 60);
+      [587.33, 739.99, 880, 1174.66, 1479.98].forEach((f, i) => { tone(f, .05 + i * .07, 1.1, "triangle", .13); tone(f * 2, .05 + i * .07, .6, "sine", .04); });
+      for (let i = 0; i < 10; i++) tone(rnd(1800, 3400), .15 + rnd(0, .6), .09, "sine", .05);
+      whoosh(0, .5, 1800, 600, 300, .1);
+    }),
+    // a little bubble "pop" as each menu button fades in
+    titlePop: play(i => { const f = 520 * Math.pow(1.26, i || 0); tone(f, 0, .12, "sine", .16, f * 1.8); tone(f * 1.5, .06, .1, "sine", .07, f * 2.4); }),
+    win: play(() => {
+      [[523.25, 0], [659.25, .14], [783.99, .28], [1046.5, .42], [783.99, .62], [1046.5, .76], [1318.5, .95]]
+        .forEach(([f, t], i, a) => { const d = i === a.length - 1 ? .9 : .22; tone(f, t, d, "triangle", .26); tone(f / 2, t, d, "sine", .1); });
+    })
+  };
+})();
+// browsers only allow audio after a user gesture
+document.addEventListener("pointerdown", () => SFX.unlock(), true);
+document.addEventListener("keydown", () => SFX.unlock(), true);
+document.addEventListener("visibilitychange", () => SFX.hidden(document.hidden));
+document.addEventListener("click", e => {
+  const b = e.target.closest && e.target.closest("button");
+  if (!b || b.disabled || b.classList.contains("switch") || b.classList.contains("dest")) return;   // moves have their own swim sound
+  SFX.click();
+}, true);
+function syncSettings(){
+  [["sound", SET.sound], ["quick", SET.quick], ["limit", REDUCE], ["hidden", SET.hidden], ["analyst", SET.analyst]].forEach(([k, v]) => $("set-" + k).setAttribute("aria-checked", String(v)));
+  $("set-limit").disabled = REDUCE_OS; $("limit-os").hidden = !REDUCE_OS;
+}
+function toggleSet(k){
+  if (k === "limit" && REDUCE_OS) return;
+  SET[k] = !SET[k];
+  try { localStorage.setItem("reefSettings", JSON.stringify(SET)); } catch (e) {}
+  if (k === "sound") SFX.muted = !SET.sound;
+  if (k === "limit"){ REDUCE = REDUCE_OS || SET.limit; document.documentElement.classList.toggle("limit", REDUCE); }
+  syncSettings(); SFX.click(); showHiddenNote(); if (G) render();
+}
+function showHiddenNote(){ const n = $("hiddennote"); if (n) n.hidden = !SET.hidden; }
+document.querySelectorAll(".setrow").forEach(r => r.onclick = () => toggleSet(r.dataset.set));
+syncSettings();
+showHiddenNote();
+
+const slideDur = dist => Math.min(650, 220 + dist * 85);
+
+function tumble(){
+  const btns = [...$("dice").children];
+  btns.forEach((b, i) => {
+    const real = b.textContent, delay = i * 90, dur = 700;
+    b.style.pointerEvents = "none";
+    const iv = setInterval(() => { b.textContent = 1 + Math.floor(Math.random() * 6); }, 55);
+    b.animate([
+      {transform:"translate(-70px,-34px) rotate(-420deg) scale(.6)", opacity:.2, offset:0},
+      {transform:"translate(-30px,-52px) rotate(-220deg) scale(1.15)", opacity:1, offset:.3},
+      {transform:"translate(10px,-4px) rotate(30deg) scale(.95)", offset:.58},
+      {transform:"translate(0,-16px) rotate(-10deg) scale(1.04)", offset:.78},
+      {transform:"translate(0,0) rotate(0) scale(1)", offset:1}],
+      {duration:dur, delay, easing:"ease-out", fill:"backwards"});
+    setTimeout(() => { clearInterval(iv); b.textContent = real; b.style.pointerEvents = ""; }, dur + delay);
+  });
+  fxBusyUntil = Math.max(fxBusyUntil, performance.now() + 700 + 90 * btns.length);
+}
+
+function fxSoundsOnly(p, bumped, whirled){
+  if (!p || p.game !== G) return;
+  let moved = 0;
+  G.divers.forEach(d => {
+    const [or, oc] = p.pos[d.id];
+    if (or === d.r && oc === d.c) return;
+    if (bumped.has(d.id)) SFX.bump(); else if (whirled.has(d.id)) SFX.whirl();
+    else if (!moved++) SFX.swim(Math.abs(or - d.r) + Math.abs(oc - d.c), slideDur(1));
+  });
+  G.names.forEach((_, o) => { const g = G.score[o] - p.score[o]; if (g > 0){ fxBank = true; SFX.score(g, 0); } });
+}
+
+function fxAfterRender(){
+  const snap = {game:G, pos:{}, carry:{}, score:G.score.slice(), items:G.items.flat().map(x => !!x)};
+  G.divers.forEach(d => { snap.pos[d.id] = [d.r, d.c]; snap.carry[d.id] = d.carry; });
+  const p = prevSnap; prevSnap = snap;
+  const rolled = FX.roll, bumped = new Set(FX.bump), whirled = new Set(FX.whirl);
+  FX.roll = false; FX.bump.clear(); FX.whirl.clear(); fxBank = false;
+  if (REDUCE){ fxSoundsOnly(p, bumped, whirled); return; }
+  if (rolled) tumble();
+  if (!p || p.game !== G) return;
+
+  const layer = $("fxlayer"), board = $("board"), lr = layer.getBoundingClientRect();
+  const ctr = (r, c) => { const b = board.children[r * N + c].getBoundingClientRect();
+    return {x:b.left + b.width / 2 - lr.left, y:b.top + b.height / 2 - lr.top, w:b.width}; };
+  let busy = 0;
+  const dur = {};
+
+  G.divers.forEach(d => {
+    const [or, oc] = p.pos[d.id];
+    const moved = or !== d.r || oc !== d.c;
+    const cell = board.children[d.r * N + d.c], svg = cell && cell.querySelector("svg.dvr");
+    if (!moved || !svg) return;
+    const a = ctr(or, oc), b = ctr(d.r, d.c), dx = a.x - b.x, dy = a.y - b.y;
+    const dist = Math.abs(or - d.r) + Math.abs(oc - d.c);
+    cell.style.overflow = "visible"; cell.style.zIndex = 6;
+    const done = () => { cell.style.overflow = ""; cell.style.zIndex = ""; };
+
+    if (bumped.has(d.id)){
+      // knocked back to the home row: tumbles away after the hit lands
+      const delay = 380, t = 800;
+      svg.animate([{transform:"translate(" + dx + "px," + dy + "px) rotate(0) scale(1)", offset:0},
+                   {transform:"translate(" + dx * .5 + "px," + dy * .5 + "px) rotate(360deg) scale(.55)", offset:.5},
+                   {transform:"translate(0,0) rotate(720deg) scale(1)", offset:1}],
+                  {duration:t, delay, easing:"cubic-bezier(.3,.7,.3,1)", fill:"backwards"}).onfinish = done;
+      burst(a.x, a.y, ["💥", "💫", "🫧"], 6, {dist:a.w * .9, delay:delay - 60, dur:700});
+      SFX.bump(delay - 60);
+      dur[d.id] = delay + t; busy = Math.max(busy, delay + t);
+      return;
+    }
+    if (whirled.has(d.id)){
+      const t = 900;
+      svg.animate([{transform:"translate(" + dx + "px," + dy + "px) rotate(0) scale(1)", opacity:1, offset:0},
+                   {transform:"translate(" + dx * .5 + "px," + dy * .5 + "px) rotate(540deg) scale(.12)", opacity:.35, offset:.5},
+                   {transform:"translate(0,0) rotate(1080deg) scale(1)", opacity:1, offset:1}],
+                  {duration:t, easing:"ease-in-out", fill:"backwards"}).onfinish = done;
+      ringAt(a.x, a.y, a.w * 1.1, 0, "#d9f3ff"); ringAt(b.x, b.y, b.w * 1.1, t * .5, "#d9f3ff");
+      SFX.whirl();
+      for (let k = 0; k < 8; k++) bubbleAt(a.x + (b.x - a.x) * k / 8, a.y + (b.y - a.y) * k / 8, k * 80);
+      dur[d.id] = t; busy = Math.max(busy, t);
+      return;
+    }
+    // normal swim: wavy path, body tilts with the stroke, bubble trail behind
+    const t = slideDur(dist), steps = 12, frames = [];
+    const len = Math.hypot(dx, dy) || 1, px = -dy / len, py = dx / len;   // perpendicular for the wave
+    const ang = Math.atan2(-dy, -dx) * 180 / Math.PI;                     // direction of travel
+    for (let k = 0; k <= steps; k++){
+      const u = k / steps, e = u * u * (3 - 2 * u), w = Math.sin(u * Math.PI * (1 + dist * .9)) * 5 * (1 - u * .3);
+      const lean = Math.sin(u * Math.PI * 2 * (1 + dist * .5)) * 9;
+      frames.push({transform:"translate(" + (dx * (1 - e) + px * w) + "px," + (dy * (1 - e) + py * w) + "px) rotate(" + lean + "deg) scale(" + (1 + Math.sin(u * Math.PI) * .12) + ")", offset:u});
+    }
+    svg.animate(frames, {duration:t, easing:"linear", fill:"backwards"}).onfinish = done;
+    for (let k = 1; k <= Math.max(3, dist * 2); k++){
+      const u = k / Math.max(3, dist * 2);
+      bubbleAt(a.x + (b.x - a.x) * u * u * (3 - 2 * u), a.y + (b.y - a.y) * u * u * (3 - 2 * u), u * t);
+    }
+    dur[d.id] = t; busy = Math.max(busy, t);
+    SFX.swim(dist, t);
+    // grabbing loot: little sparkle once the diver arrives
+    if (!p.carry[d.id] && d.carry) burst(b.x, b.y, ["✨", "✨", "🫧"], 6, {dist:b.w * .8, delay:t - 40, dur:800});
+  });
+
+  // new items on the board (chest surfacing, dropped loot): pop in
+  for (let i = 0; i < N * N; i++){
+    const itm = board.children[i].querySelector(".itm");
+    if (itm && !p.items[i]){
+      itm.animate([{transform:"translateY(-30px) scale(.2)", opacity:0}, {transform:"translateY(4px) scale(1.25)", opacity:1, offset:.6}, {transform:"none", opacity:1}],
+                  {duration:600, delay:300, easing:"ease-out", fill:"backwards"});
+      const b = ctr(Math.floor(i / N), i % N);
+      burst(b.x, b.y, ["✨", "🫧"], 4, {dist:b.w * .7, delay:300, dur:700});
+    }
+  }
+
+  // points: float text, burst, score pop
+  G.names.forEach((_, o) => {
+    const gain = G.score[o] - p.score[o];
+    if (gain <= 0) return;
+    const bk = G.divers.find(d => d.owner === o && p.carry[d.id] && !d.carry && isHome(o, d.r, d.c));
+    const [hr, hc] = o === 0 ? [N - 1, MID] : o === 1 ? [0, MID] : o === 2 ? [MID, 0] : [MID, N - 1];
+    const pos = bk ? ctr(bk.r, bk.c) : ctr(hr, hc);
+    const delay = bk && dur[bk.id] ? dur[bk.id] - 40 : 0;
+    const big = gain > 1;
+    fxBank = true; SFX.score(gain, delay);
+    ringAt(pos.x, pos.y, pos.w * 1.3, delay);
+    if (big) ringAt(pos.x, pos.y, pos.w * 1.3, delay + 160, "#fff6d8");
+    burst(pos.x, pos.y, big ? ["💰", "✨", "🪙", "⭐"] : ["✨", "⭐", "🫧", "✨"], big ? 16 : 10, {dist:big ? 120 : 85, delay, dur:1300});
+    floatText(pos.x, pos.y - pos.w * .4, "+" + gain + (big ? " CHEST!" : ""), COLOR[o], delay);
+    const card = $("score").children[o], pts = card && card.querySelector(".pts");
+    if (card){
+      pts.style.transformOrigin = "left center";
+      pts.animate([{transform:"scale(1)"}, {transform:"scale(1.8)", color:"#fff", offset:.35}, {transform:"scale(1)"}],
+                  {duration:800, delay:delay + 150, easing:"cubic-bezier(.3,1.5,.5,1)"});
+      card.animate([{boxShadow:"0 0 0 0 rgba(255,215,90,.95)", background:"rgba(255,215,90,.45)"},
+                    {boxShadow:"0 0 30px 12px rgba(255,215,90,0)", background:"rgba(0,0,0,.25)"}],
+                   {duration:1100, delay:delay + 100});
+    }
+    busy = Math.max(busy, delay + 1100);
+  });
+  if (busy) fxBusyUntil = Math.max(fxBusyUntil, performance.now() + busy);
+}
+
+function celebrate(){
+  SFX.win();
+  if (REDUCE) return;
+  const o = $("over"), em = ["⭐", "🫧", "🐚", "🐠", "✨", "🦀"];
+  for (let i = 0; i < 28; i++){
+    const e = document.createElement("div");
+    e.className = "conf"; e.textContent = em[i % em.length];
+    e.style.cssText = "left:" + rnd(2, 96) + "%;font-size:" + rnd(18, 34) + "px";
+    o.appendChild(e);
+    e.animate([{transform:"translateY(0) rotate(0)", opacity:1}, {transform:"translateY(" + (innerHeight + 80) + "px) rotate(" + rnd(-300, 300) + "deg)", opacity:.9}],
+              {duration:rnd(2200, 4200), delay:rnd(0, 1500), easing:"ease-in"}).onfinish = () => e.remove();
+  }
+}
+
+function update(){ render(); maybeAi(); }
+function render(){
+  const human = !isCpu(G.turn) && !G.over;
+  // scores
+  const sc = $("score"); sc.textContent = "";
+  G.names.forEach((_, o) => {
+    const d = document.createElement("div");
+    d.className = "pl p" + o + (G.turn === o && !G.over ? " on" : "");
+    const b = document.createElement("b"), lv = levelOf(o); b.textContent = G.names[o] + (lv ? " " + LEVELS[lv].icon : "");
+    const p = document.createElement("div"); p.className = "pts"; p.textContent = G.score[o] + " / " + WIN;
+    const tk = document.createElement("div"); tk.style.cssText = "font-size:.8rem;color:var(--muted)";
+    tk.textContent = "\u{1F30A} Tide token" + (G.tide[o] === 1 ? ": 1 ready" : "s: " + G.tide[o] + " left");
+    const pips = document.createElement("div"); pips.className = "pips";
+    for (let i = 0; i < WIN; i++){ const sp = document.createElement("span"); if (i < G.score[o]) sp.className = "on"; pips.appendChild(sp); }
+    d.append(b, p, pips, tk); sc.appendChild(d);
+  });
+  // dice & status
+  const dice = $("dice"); dice.textContent = "";
+  G.dice.forEach((d, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "die" + (d.used ? " used" : "") + (G.sel.die === i && !d.used ? " sel" : "");
+    b.textContent = d.v; b.disabled = d.used || !human;
+    b.setAttribute("aria-label", "Die showing " + d.v + (d.used ? ", used" : ""));
+    b.onclick = () => { G.sel.die = i; G.sel.diver = null; update(); };
+    dice.appendChild(b);
+  });
+  $("roll").hidden = !(human && G.phase === "roll"); $("roll").disabled = false;
+  $("tide").hidden = !(human && G.phase === "move" && G.tide[G.turn]);
+  $("tide").disabled = !(G.tide[G.turn] && !G.dice.some(d => d.used));
+  $("tide").textContent = "🌊 Use tide token (reroll) · " + G.tide[G.turn] + " left";
+  $("skip").hidden = !(human && G.phase === "swap"); $("skip").textContent = G.rerolled ? "End turn" : "Roll again";
+  let st;
+  if (G.over) st = G.names[G.winner] + " wins!";
+  else if (isCpu(G.turn)) st = G.names[G.turn] + " is thinking";
+  else if (G.phase === "swap") st = G.sel.diver ? TAP + " a highlighted opponent to swap places." : (G.divers.some(d => d.owner === G.turn && swapTargets(d).length) ? G.names[G.turn] + ": " + (BIG ? "triple" : "doubles") + "! Swap one of your divers with any opponent, or " + (G.rerolled ? "end your turn." : "roll again.") : G.names[G.turn] + ": " + (BIG ? "triple" : "doubles") + "! No swap available, so roll again.");
+  else if (G.phase === "roll") st = G.names[G.turn] + ": roll the dice.";
+  else if (!G.sel.diver) st = G.names[G.turn] + ": pick a die, then one of your divers.";
+  else st = "Now " + TAP.toLowerCase() + " a highlighted square to move.";
+  $("status").textContent = st; $("status").classList.toggle("thinking", isCpu(G.turn) && !G.over);
+
+  // board
+  let reach = null;
+  if (human && G.phase === "move" && G.sel.diver && G.sel.die !== null)
+    reach = computeReach(G.sel.diver, budgetFor(G.sel.diver, G.dice[G.sel.die].v));
+  else if (human && G.phase === "swap" && G.sel.diver)
+    reach = new Set(swapTargets(G.sel.diver).map(e => e.r + "," + e.c));
+  const board = $("board"); board.textContent = "";
+  board.classList.toggle("fourp", G.playerCount === 4);
+  board.style.gridTemplateColumns = "repeat(" + N + ",1fr)"; $("game").classList.toggle("big", BIG);
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++){
+    const t = T(r, c), dv = cellDiver(r, c), item = G.items[r][c];
+    const isDest = !!(reach && reach.has(r + "," + c));
+    const mine = human && dv && dv.owner === G.turn && (G.phase === "move" || (G.phase === "swap" && swapTargets(dv).length > 0));
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "cell t-" + (t === "." ? "W0" : t) +
+      (r === N - 1 ? " home0" : "") + (r === 0 ? " home1" : "") +
+      (G.playerCount === 4 && c === 0 ? " home2" : "") + (G.playerCount === 4 && c === N - 1 ? " home3" : "") +
+      (isDest ? " dest" + (dv ? " bumpdest" : "") : "") + (mine ? " mine" : "") + (dv && G.sel.diver === dv ? " sel" : "");
+    let html = t === "K" ? SVG.kelp : t === "R" ? SVG.rock : t === "W" ? SVG.whirl : "";
+    if (item) html += '<span class="itm">' + SVG[item === "chest" ? "chest" : "pearl"] + '</span>';
+    if (G.tideTile && G.tideTile.r === r && G.tideTile.c === c) html += '<span class="itm" style="font-size:1.6em;display:grid;place-items:center">🌊</span>';
+    if (dv) html += diverSvg(dv);
+    b.innerHTML = html;
+    const label = "Row " + (r + 1) + ", column " + (c + 1) + ": " +
+      (t === "K" ? "kelp" : t === "R" ? "rock" : t === "W" ? "whirlpool" : "water") +
+      (item ? ", " + item : "") + (G.tideTile && G.tideTile.r === r && G.tideTile.c === c ? ", tide token" : "") + (dv ? ", " + G.names[dv.owner] + " diver " + dv.label : "") + (isDest ? ", can move here" : "");
+    b.setAttribute("aria-label", label);
+    if (isDest){
+      b.onclick = () => { if (G.phase === "swap") doSwap(G.sel.diver, dv); else doMove(G.sel.diver, r, c); update(); };
+    } else if (mine){
+      b.onclick = () => { G.sel.diver = dv; update(); };
+    } else { b.disabled = true; b.tabIndex = -1; }
+    board.appendChild(b);
+  }
+  // move analyst card
+  const ac = $("analysis"); ac.textContent = "";
+  ac.hidden = !SET.analyst;
+  if (SET.analyst){
+    const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+    const hd = mk("p", "hint", "🔍 Move Analyst"); hd.style.marginBottom = "6px"; ac.appendChild(hd);
+    const L = G.last;
+    if (!L) ac.appendChild(mk("p", "an-txt", "Make a move to see how it rates (1-100, where 100 is the best possible move)."));
+    else {
+      const top = mk("div", "an-top"), num = mk("span", "an-num", String(L.rating)), lbl = mk("span", "an-lbl", L.label);
+      num.style.color = lbl.style.color = L.color; top.append(num, lbl, mk("span", "an-txt", "/ 100 · " + G.names[L.owner])); ac.appendChild(top);
+      const bar = mk("div", "an-bar"), fill = document.createElement("i"); fill.style.width = L.rating + "%"; fill.style.background = L.color; bar.appendChild(fill); ac.appendChild(bar);
+      ac.appendChild(mk("p", "an-txt", "Played: " + L.played + "."));
+      ac.appendChild(mk("p", "an-txt", L.isBest ? "That was the engine's top choice out of " + L.alts + " options." : (L.missedWin ? "Missed a winning move! " : "") + "Best was: " + L.best + "."));
+    }
+    const avg = a => a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : "–";
+    const acc = mk("div", "an-acc");
+    G.names.forEach((_, o) => { const sp = mk("span", "", G.names[o] + ": " + avg(G.stats[o]) + " avg (" + G.stats[o].length + " moves)"); sp.style.color = COLOR[o]; acc.appendChild(sp); });
+    ac.appendChild(acc);
+  }
+  // log
+  const lg = $("log"); lg.textContent = "";
+  G.log.slice(0, 8).forEach(m => { const li = document.createElement("li"); li.textContent = m; lg.appendChild(li); });
+  fxAfterRender();
+  // game over
+  if (G.over){
+    if (G.vsCpu && !G.recorded){ G.recorded = true; addRec(G.level, G.winner === 0); }
+    $("over-rec").textContent = G.vsCpu ? recText(G.level) : "";
+    $("over-ico").textContent = (G.vsCpu && G.winner === 1) ? LEVELS[G.level].icon : "🏆";
+    const avgR = a => a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null;
+    $("over-acc").textContent = (SET.analyst && (G.stats[0].length || G.stats[1].length))
+      ? "🔍 Average move rating: " + G.names[0] + " " + (avgR(G.stats[0]) ?? "–") + " · " + G.names[1] + " " + (avgR(G.stats[1]) ?? "–") : "";
+    $("over-title").textContent = G.names[G.winner] + " wins the reef!";
+    $("over-sub").textContent = G.names.map((n, i) => n + " " + G.score[i]).join(" · ");
+    const showOver = () => { if (G && G.over){ $("over").hidden = false; $("again").focus(); celebrate(); } };
+    if (fxBank && !REDUCE){ $("over").hidden = true; setTimeout(showOver, 1500); }
+    else { $("over").hidden = false; setTimeout(() => $("again").focus(), 0); celebrate(); }
+  } else $("over").hidden = true;
+}
+
+/* ---------- WIRING ---------- */
+let curScreen = null, wiping = false;
+function swapScreen(name){
+  curScreen = name;
+  ["title","howto","settings","setup","game"].forEach(id => $(id).hidden = id !== name);
+  $("gamehead").hidden = name !== "game";
+  window.scrollTo(0, 0);
+}
+// bubbles sweep up the screen; the page changes while they cover it
+function bubbleWipe(){
+  const wipe = $("bubblewipe"), H = innerHeight;
+  wipe.style.pointerEvents = "auto";                       // swallow clicks mid-transition
+  const tint = document.createElement("div");
+  tint.style.cssText = "position:absolute;inset:0;background:linear-gradient(0deg,rgba(150,225,255,.8),rgba(60,150,210,.6))";
+  wipe.appendChild(tint);
+  tint.animate([{opacity:0}, {opacity:1, offset:.4}, {opacity:1, offset:.58}, {opacity:0}], {duration:1100, easing:"ease-in-out"}).onfinish = () => tint.remove();
+  for (let i = 0; i < 70; i++){
+    const z = rnd(18, 130), e = document.createElement("div");
+    e.style.cssText = "position:absolute;border-radius:50%;left:" + rnd(-4, 100) + "%;top:" + H + "px;width:" + z + "px;height:" + z + "px;" +
+      "border:2px solid rgba(235,250,255,.9);background:radial-gradient(circle at 30% 28%,rgba(255,255,255,.85),rgba(255,255,255,.12) 55%,rgba(180,230,255,.28))";
+    wipe.appendChild(e);
+    e.animate([{transform:"translate(0,0)"},
+               {transform:"translate(" + rnd(-45, 45) + "px," + -(H * .55) + "px)", offset:.5},
+               {transform:"translate(" + rnd(-70, 70) + "px," + -(H + z + 60) + "px)"}],
+              {duration:rnd(800, 1200), delay:rnd(0, 450), easing:"ease-in", fill:"backwards"}).onfinish = () => e.remove();
+  }
+  SFX.bubbles();
+  setTimeout(() => { wipe.style.pointerEvents = "none"; wiping = false; }, 1000);
+}
+function show(name, instant){
+  if (instant || REDUCE || curScreen === null || name === curScreen) { swapScreen(name); return; }
+  if (wiping) return;
+  wiping = true; bubbleWipe();
+  setTimeout(() => swapScreen(name), 480);
+}
+const REC_KEY = "reefRecord";
+function getRec(){ try { return JSON.parse(localStorage.getItem(REC_KEY)) || {}; } catch (e) { return {}; } }
+function addRec(level, won){ const r = getRec(), x = r[level] || [0, 0]; x[won ? 0 : 1]++; r[level] = x; try { localStorage.setItem(REC_KEY, JSON.stringify(r)); } catch (e) {} }
+function recText(level){
+  const x = getRec()[level]; if (!x || !(x[0] + x[1])) return "";
+  return "Your record vs " + LEVELS[level].icon + " " + LEVELS[level].name + ": " + x[0] + " win" + (x[0] === 1 ? "" : "s") + " · " + x[1] + " loss" + (x[1] === 1 ? "" : "es");
+}
+let DIFF = "medium";
+try { const d = localStorage.getItem("reefDiff"); if (LEVELS[d]) DIFF = d; const nm = localStorage.getItem("reefName"); if (nm) $("n1").value = nm; } catch (e) {}
+function setDiff(d){
+  DIFF = d; try { localStorage.setItem("reefDiff", d); } catch (e) {}
+  document.querySelectorAll(".dbtn").forEach(b => { const on = b.dataset.diff === d; b.classList.toggle("on", on); b.setAttribute("aria-checked", on); });
+  $("diffnote").textContent = LEVELS[d].icon + " " + LEVELS[d].blurb;
+  const t = recText(d); $("record").textContent = t; $("record").hidden = !t || $("mode").value !== "cpu";
+}
+function setMode(v){
+  $("mode").value = v;
+  document.querySelectorAll(".segbtn").forEach(b => b.classList.toggle("on", b.dataset.mode === v));
+  $("p2box").hidden = v === "cpu";
+  $("p3box").hidden = v !== "4p"; $("p4box").hidden = v !== "4p";
+  $("fourhint").hidden = v !== "4p";
+  $("diffbox").hidden = v !== "cpu"; $("diffnote").hidden = v !== "cpu";
+  setDiff(DIFF);
+}
+function begin(){
+  const vs = $("mode").value === "cpu";
+  const n1 = $("n1").value.trim() || "Player 1";
+  try { localStorage.setItem("reefName", $("n1").value.trim()); } catch (e) {}
+  let n2 = vs ? "Computer" : ($("n2").value.trim() || "Player 2");
+  if (n2 === n1) n2 += " 2";
+  let names = [n1, n2];
+  if ($("mode").value === "4p"){
+    const n3 = $("n3").value.trim() || "Player 3", n4 = $("n4").value.trim() || "Player 4";
+    names = [n1, n2, n3, n4];
+    names = names.map((n, i) => names.slice(0, i).includes(n) ? n + " " + (i + 1) : n);
+  }
+  newGame(names, vs, DIFF);
+  show("game"); $("over").hidden = true;
+  update();
+}
+$("start").onclick = begin;
+$("again").onclick = begin;
+$("roll").onclick = () => { if (G.phase === "roll" && !isCpu(G.turn) && !G.over){ roll(); update(); } };
+const toTitle = () => { clearTimeout(aiTimer); G = null; $("over").hidden = true; show("title"); };
+$("restart").onclick = toTitle;
+$("exit").onclick = toTitle;
+$("tide").onclick = () => { if (G && !G.over && !isCpu(G.turn)){ useTide(); update(); } };
+$("skip").onclick = () => { if (G && !G.over && !isCpu(G.turn) && G.phase === "swap"){ if (G.rerolled) finishTurn(); else { rollAgain(); roll(); } update(); } };
+$("play").onclick = () => show("setup");
+$("howbtn").onclick = () => show("howto");
+$("howback").onclick = () => show("title");
+$("setbtn").onclick = () => show("settings");
+$("settingsback").onclick = () => show("title");
+$("howplay").onclick = () => show("setup");
+$("setupback").onclick = () => show("title");
+document.querySelectorAll(".segbtn").forEach(b => b.onclick = () => setMode(b.dataset.mode));
+document.querySelectorAll(".dbtn").forEach(b => b.onclick = () => setDiff(b.dataset.diff));
+setMode("2p");
+// how-to-play legend (unique gradient id so it never clashes with the board's pearls)
+$("legend").innerHTML = [["pearl","Pearl · 1 point"],["chest","Chest · 2 points"],["kelp","Kelp · costs 2"],["rock","Rock · blocked"],["whirl","Whirlpool · warps"]]
+  .map(([k, t]) => '<div class="lg"><span class="lgt t-' + k + '">' + SVG[k].replace(/pg/g, "pgL") + '</span><small>' + t + '</small></div>').join("");
+
+/* ---------- OCEAN ATMOSPHERE (visual only) ---------- */
+(function(){
+  const R = (a, b) => a + Math.random() * (b - a);
+  const bub = $("bubbles");
+  for (let i = 0; i < 28; i++){
+    const e = document.createElement("b"), z = R(6, 22);
+    e.style.cssText = `left:${R(0,100)}%;width:${z}px;height:${z}px;animation-duration:${R(9,20)}s;animation-delay:${-R(0,20)}s;opacity:${R(.4,.9)}`;
+    bub.appendChild(e);
+  }
+  // every sprite below is drawn FACING RIGHT; swimming left flips it (see .rev in the CSS), so the head always leads
+  const fishSvg = (body, fin, belly) => '<svg viewBox="0 0 60 32" width="100%" height="100%">' +
+    '<path class="tail" d="M16 16 L1 4 Q6 16 1 28 Z" fill="' + fin + '"/>' +
+    '<path d="M26 6 Q34 -1 42 6 Z" fill="' + fin + '"/>' +
+    '<ellipse cx="33" cy="16" rx="21" ry="11" fill="' + body + '"/>' +
+    '<path d="M16 17 Q33 30 52 18 Q34 24 16 17Z" fill="' + belly + '" opacity=".7"/>' +
+    '<path d="M42 7 Q46 16 42 25" stroke="rgba(0,0,0,.18)" stroke-width="2" fill="none"/>' +
+    '<circle cx="46" cy="13" r="3.2" fill="#fff"/><circle cx="47" cy="13" r="1.6" fill="#10263a"/></svg>';
+  const turtleSvg = '<svg viewBox="0 0 70 40" width="100%" height="100%">' +
+    '<ellipse class="tail" cx="14" cy="22" rx="9" ry="3.5" fill="#6fcf97" transform="rotate(-20 14 22)"/>' +
+    '<ellipse cx="34" cy="20" rx="22" ry="14" fill="#2f9e6a"/><path d="M18 20 Q34 2 50 20 Z" fill="#3fbf84"/>' +
+    '<path d="M26 14 L30 22 M38 12 L38 22 M48 16 L44 22" stroke="#1d6b49" stroke-width="2" fill="none"/>' +
+    '<ellipse cx="56" cy="17" rx="9" ry="6.5" fill="#6fcf97"/><circle cx="60" cy="15" r="2" fill="#10263a"/>' +
+    '<ellipse class="tail" cx="40" cy="33" rx="9" ry="4" fill="#6fcf97" transform="rotate(25 40 33)"/></svg>';
+  const sprites = [
+    [fishSvg("#ff9f1c", "#ff6b3d", "#ffe3a8"), 46, 30], [fishSvg("#5ec8ff", "#2f8fd8", "#d8f3ff"), 38, 24],
+    [fishSvg("#ff7aa8", "#d9467a", "#ffd3e3"), 42, 27], [fishSvg("#ffd45c", "#e0a82e", "#fff3c2"), 34, 22],
+    [fishSvg("#6be3b5", "#1f9e7a", "#d4fff0"), 40, 25], [turtleSvg, 62, 36], [fishSvg("#b99cff", "#7a5ad8", "#e8ddff"), 36, 23]
+  ], lane = $("fishlane");
+  for (let i = 0; i < 9; i++){
+    const sp = sprites[i % sprites.length], e = document.createElement("i");
+    e.innerHTML = sp[0];
+    if (i % 2) e.classList.add("rev");                       // odd ones swim right-to-left, flipped
+    const slow = sp === sprites[5] ? 1.7 : 1;                // the turtle is slower
+    e.style.cssText += `;top:${R(10,78)}%;width:${sp[1]}px;height:${sp[2]}px;animation-duration:${R(26,48) * slow}s;animation-delay:${-R(0,40)}s`;
+    lane.appendChild(e);
+  }
+  const weeds = $("weeds");
+  for (let i = 0; i < 26; i++){
+    const e = document.createElement("i");
+    e.style.cssText = `left:${(i / 26) * 100 + R(-1,1)}%;height:${R(40,150)}px;animation-duration:${R(3,6)}s;animation-delay:${-R(0,5)}s;opacity:${R(.6,1)}`;
+    weeds.appendChild(e);
+  }
+})();
+/* ---------- TITLE INTRO: logo rises with bubbles, then the buttons fade in ---------- */
+const introFx = $("introfx");
+let introOn = false, introTimers = [], introAnims = [], introRaf = 0;
+function introBubble(x, y, z, rise, dur){
+  const e = document.createElement("div"); e.className = "fxp fxbub";
+  e.style.cssText = "left:" + x + "px;top:" + y + "px;width:" + z + "px;height:" + z + "px";
+  introFx.appendChild(e);
+  const dx = rnd(-30, 30);
+  e.animate([{transform:"translate(0,0) scale(.4)", opacity:0},
+             {transform:"translate(" + dx * .5 + "px," + -rise * .4 + "px) scale(1)", opacity:1, offset:.2},
+             {transform:"translate(" + dx + "px," + -rise + "px) scale(1)", opacity:0}],
+            {duration:dur, easing:"ease-out", fill:"backwards"}).onfinish = () => e.remove();
+}
+function endIntro(){
+  if (!introOn) return;
+  introOn = false; introTimers.forEach(clearTimeout); cancelAnimationFrame(introRaf);
+  $("title").classList.remove("intro");
+  introAnims.forEach(a => a.cancel()); introAnims = [];
+}
+function runIntro(quick){
+  const T = $("title"), diver = T.querySelector(".diver"), logo = T.querySelector(".logo-text"), tag = T.querySelector(".tag");
+  const btns = [...T.querySelectorAll(".menu button")];
+  const vh = innerHeight, W = innerWidth, S = document.documentElement.classList.contains("phone") ? .7 : 1;
+  // timings in ms: the quick version is the same sequence, just squeezed into about a second and a half
+  const q = quick ? {rise:700, logoAt:100, land:800, tag:700, tagDur:400, btn:850, step:90, btnDur:350, end:1500, emit:800, bubbles:12, spread:400, pop:300}
+                  : {rise:1700, logoAt:250, land:1950, tag:2150, tagDur:600, btn:2500, step:250, btnDur:500, end:3600, emit:2050, bubbles:24, spread:900, pop:420};
+  const later = (ms, fn) => introTimers.push(setTimeout(fn, ms));
+  const A = (el, kf, o) => { const a = el.animate(kf, Object.assign({fill:"both"}, o)); introAnims.push(a); return a; };
+  const snd = f => { if (!quick || SFX.live) f(); };      // the quick opening has no tap to unlock sound, so only make noise if the browser already allows it
+  const ease = "cubic-bezier(.16,.84,.3,1)";
+  introOn = true;
+  SFX.unlock(); snd(() => quick ? SFX.bubbles() : SFX.titleRise());
+  for (let i = 0; i < q.bubbles; i++) later(rnd(0, q.spread), () => introBubble(rnd(0, W), vh + 20, rnd(10, 34) * S, rnd(vh * .5, vh * 1.1), rnd(1400, 2200) * (quick ? .6 : 1)));
+  A(diver, [{translate:"0 " + vh * .8 + "px", opacity:0}, {opacity:1, offset:.2}, {translate:"0 0", opacity:1}], {duration:q.rise, easing:ease});
+  A(logo,  [{translate:"0 " + vh * .8 + "px", opacity:0}, {opacity:1, offset:.2}, {translate:"0 0", opacity:1}], {duration:q.rise, delay:q.logoAt, easing:ease});
+  // bubbles stream off the title while it floats up
+  const t0 = performance.now(); let n = 0;
+  const emit = now => {
+    if (!introOn || now - t0 > q.emit) return;
+    if ((n++ & 1) === 0){
+      const r = logo.getBoundingClientRect();
+      if (r.bottom > 0 && r.top < vh) introBubble(rnd(r.left, r.right), rnd(r.top + r.height * .3, r.bottom + 10), rnd(6, 20) * S, rnd(60, 180) * S, rnd(900, 1500) * (quick ? .6 : 1));
+    }
+    introRaf = requestAnimationFrame(emit);
+  };
+  introRaf = requestAnimationFrame(emit);
+  later(q.land, () => {                                 // title lands
+    snd(() => SFX.titleLand());
+    A(logo, [{scale:1.09}, {scale:1}], {duration:q.pop, easing:"ease-out"});
+    const r = logo.getBoundingClientRect();
+    for (let i = 0; i < (quick ? 8 : 16); i++) introBubble(r.left + r.width * (i / ((quick ? 8 : 16) - 1)), r.top + r.height * rnd(.2, .9), rnd(6, 16) * S, rnd(50, 140) * S, rnd(800, 1300) * (quick ? .6 : 1));
+  });
+  A(tag, [{opacity:0, translate:"0 10px"}, {opacity:1, translate:"0 0"}], {duration:q.tagDur, delay:q.tag, easing:"ease-out"});
+  btns.forEach((b, i) => {
+    A(b, [{opacity:0, translate:"0 16px"}, {opacity:1, translate:"0 0"}], {duration:q.btnDur, delay:q.btn + i * q.step, easing:"ease-out"});
+    later(q.btn + i * q.step, () => snd(() => SFX.titlePop(i)));
+  });
+  later(q.end, endIntro);
+}
+// tap (or Enter/Space/Esc) skips the intro
+$("title").addEventListener("pointerdown", endIntro);
+document.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " " || e.key === "Escape") endIntro(); }, true);
+
+show("title", true);
+if (REDUCE){ $("title").classList.remove("intro"); }
+else if (SET.quick){ runIntro(true); }                  // quick opening: no tap needed, short animation
+else SFX.ready().then(ok => {
+  if (ok) runIntro();
+  else {                                                // browsers block sound until the first tap, so ask for one to keep the intro in sync with its audio
+    const g = $("gate"); g.hidden = false;
+    SFX.ambient(true);                                  // ambient bubbles while waiting (they start as soon as the browser lets the page make sound)
+    g.onpointerdown = () => SFX.ambient(false);
+    g.onclick = () => { g.hidden = true; SFX.ambient(false); setTimeout(runIntro, 120); };
+    g.focus();
+  }
+});
+</script>
+</body>
+</html>
