@@ -3,27 +3,41 @@
 <html>
 <head>
 <title>My Games</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
 <style>
 body {
   background: #101522;
   color: white;
-  font-family: Arial;
+  font-family: Arial, sans-serif;
   text-align: center;
   padding: 30px;
+  margin: 0;
 }
-h1 { font-size: 45px; }
+
+h1 {
+  font-size: 45px;
+}
+
 .games {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 20px;
 }
+
 .game {
   background: #202c42;
   padding: 30px;
   border-radius: 15px;
   width: 220px;
+  transition: transform 0.2s;
 }
+
+.game:hover {
+  transform: translateY(-5px);
+}
+
 a {
   display: inline-block;
   background: #2878ff;
@@ -31,9 +45,15 @@ a {
   padding: 12px 25px;
   border-radius: 8px;
   text-decoration: none;
+  font-weight: bold;
+}
+
+a:hover {
+  background: #145bd1;
 }
 </style>
 </head>
+
 <body>
 
 <h1>🎮 MY GAMES</h1>
@@ -41,21 +61,22 @@ a {
 
 <div class="games">
 
-<div class="game">
-<h2>Reef Run</h2>
-<a href="reef-run.html">PLAY</a>
+  <div class="game">
+    <h2>Reef Run</h2>
+    <a href="reef-run.html">PLAY</a>
+  </div>
+
+  <div class="game">
+    <h2>Poly Track</h2>
+    <a href="poly.html">PLAY</a>
+  </div>
+
+  <div class="game">
+    <h2>Spikeball</h2>
+    <a href="spikeball.html">PLAY</a>
+  </div>
+
 </div>
 
-<div class="game">
-<h2>Poly Track</h2>
-<a href="poly.html">PLAY</a>
-</div>
-
-<div class="game">
-<h2>Spikeball</h2>
-<a href="spikeball.html">PLAY</a>
-</div>
-
-</div>
 </body>
 </html>
