@@ -20,10 +20,10 @@
   addEventListener("orientationchange", () => setTimeout(apply, 150));
 })();
 </script>
-<title>Reef Run · a multiplayer dice board game</title>
+<title>Reef Run · a two-player dice board game</title>
 <style>
   :root{
-    --c0:#2ec4b6; --c1:#ff9f1c; --c2:#b58cff; --c3:#ff718d; --ink:#10263a; --paper:#f4efe3; --muted:#a9c0d3;
+    --c0:#2ec4b6; --c1:#ff9f1c; --ink:#10263a; --paper:#f4efe3; --muted:#a9c0d3;
     --water-a:#1c6fa3; --water-b:#1a68995c; --good:#47d18c; --bad:#ff5c7a;
   }
   *{box-sizing:border-box}
@@ -62,8 +62,6 @@
   .cell:nth-child(2n){background:linear-gradient(135deg,#2680b6,#1a68a0)}
   .cell.home0{background:linear-gradient(135deg,#1f8f87,#187a73)}
   .cell.home1{background:linear-gradient(135deg,#a7742a,#8a5d1f)}
-  .board.fourp .cell.home2{background:linear-gradient(135deg,#7657a8,#563b83)}
-  .board.fourp .cell.home3{background:linear-gradient(135deg,#bd536c,#91364d)}
   .cell.t-K{background:linear-gradient(135deg,#1f7f6b,#17695a)}
   .cell.t-R{background:linear-gradient(135deg,#40576b,#34495a)}
   .cell svg{position:absolute; inset:0; width:100%; height:100%; pointer-events:none}
@@ -80,12 +78,12 @@
 
   .side{display:flex; flex-direction:column; gap:12px}
   .card{background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); border-radius:14px; padding:12px 14px}
-  .score{display:flex; gap:10px; flex-wrap:wrap}
-  .pl{flex:1 1 42%; min-width:0; border-radius:12px; padding:8px 10px; border:3px solid transparent; background:rgba(0,0,0,.25)}
+  .score{display:flex; gap:10px}
+  .pl{flex:1; border-radius:12px; padding:8px 10px; border:3px solid transparent; background:rgba(0,0,0,.25)}
   .pl.on{border-color:#fff}
   .pl b{display:block; font-size:1rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   .pl .pts{font-size:1.8rem; font-weight:800}
-  .pl.p0 .pts{color:var(--c0)} .pl.p1 .pts{color:var(--c1)} .pl.p2 .pts{color:var(--c2)} .pl.p3 .pts{color:var(--c3)}
+  .pl.p0 .pts{color:var(--c0)} .pl.p1 .pts{color:var(--c1)}
   .dice{display:flex; gap:12px; flex-wrap:wrap}
   .game.big{grid-template-columns:minmax(0,720px) 1fr}
   .an-top{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap}
@@ -192,14 +190,17 @@
   @keyframes dfloat{50%{transform:translateY(-2px)}}
   .die{will-change:transform}
   .conf{position:absolute; top:-40px; pointer-events:none; z-index:0}
-  @media (prefers-reduced-motion:reduce){ .cell svg.dvr{animation:none} }
+  .tok{position:absolute; inset:0; pointer-events:none; animation:tglow 1.8s ease-in-out infinite}
+  .tok svg{filter:drop-shadow(0 0 5px #7fd4f5)}
+  @keyframes tglow{50%{transform:translateY(-2px) scale(1.12)}}
+  @media (prefers-reduced-motion:reduce){ .cell svg.dvr,.tok{animation:none} }
 
   /* ---------- MENUS & POLISH ---------- */
   .glass h2{display:flex; align-items:center; gap:8px; margin:0 0 10px; padding-bottom:10px; border-bottom:3px dotted #d9ccb0; font-size:1.5rem}
   .over .glass h2{justify-content:center; border:0; padding-bottom:0; margin:4px 0 8px}
   label small{font-weight:400; color:#5b7384; margin-left:4px}
   .chip{display:inline-block; width:13px; height:13px; border-radius:50%; margin-right:7px; vertical-align:-1px; border:2px solid var(--ink)}
-  .chip.c0{background:var(--c0)} .chip.c1{background:var(--c1)} .chip.c2{background:var(--c2)} .chip.c3{background:var(--c3)}
+  .chip.c0{background:var(--c0)} .chip.c1{background:var(--c1)}
   .segbtn{display:flex; align-items:center; justify-content:center; gap:7px; padding:12px 8px; transition:transform .12s,background .15s}
   .segbtn .ico{font-size:1.25rem}
   .names{align-items:start}
@@ -330,7 +331,7 @@
 
   /* ---------- "LIMIT ANIMATIONS" SETTING (same rules as prefers-reduced-motion) ---------- */
   .limit .spin,.limit .cell.dest::after,.limit .rays i,.limit .bubbles b,.limit .fishlane i,.limit .fishlane .tail,.limit .weeds i,.limit .bob,.limit .glass,
-  .limit .cell svg.dvr,.limit .logo-text,.limit #play,.limit .pl.on,.limit .board::after,.limit .status.thinking::after,.limit .dbtn.on .di,.limit #gate span{animation:none}
+  .limit .cell svg.dvr,.limit .tok,.limit .logo-text,.limit #play,.limit .pl.on,.limit .board::after,.limit .status.thinking::after,.limit .dbtn.on .di,.limit #gate span{animation:none}
   .limit button.switch,.limit button.switch span{transition:none}
 </style>
 </head>
@@ -393,7 +394,7 @@
       <li><b>🪸 Terrain:</b> rocks block the way, kelp costs 2 steps to enter, and ending on a whirlpool sweeps you to the other whirlpool.</li>
       <li><b>⚖️ Tiebreaker:</b> if every piece is banked and the score is tied 4-4, a fresh golden chest appears in the middle. Whoever banks it wins.</li>
       <li><b>🎲🎲 Doubles:</b> roll the same number twice and, after using both dice, you choose: swap one of your divers with any opponent diver (swapping ends your turn; divers on their home row are safe from swaps), or roll again. You can only roll again once per turn; if you roll doubles a second time, you can swap or end your turn.</li>
-      <li><b>🌊 Tide token:</b> once per game, after rolling and before moving, you may spend your token to reroll both dice. You must keep the new result.</li>
+      <li><b>🌊 Tide tokens:</b> you start with one (two in Hidden Mode). After rolling and before moving, you may spend a token to reroll all your dice. You must keep the new result. Once someone banks a golden chest (the +2), a bonus tide token has a 1 in 20 chance each turn of drifting onto the middle six rows of the reef. End a move on it to grab it. You can hold up to three tokens, and only one bonus token floats at a time.</li>
       <li><b>🕳️ Hidden Mode (Settings):</b> a much bigger reef (23×23). Each player has <b>8 divers</b>, you roll <b>6 dice</b> and can use each one, the reef holds <b>16 pearls</b> and <b>2 golden chests</b> (they surface together), and each player has <b>2 tide tokens</b>. First to <b>10 points</b> wins. Bonus rule: instead of doubles, rolling <b>three or more of a kind</b> lets you swap or roll again.</li>
       <li><b>🪙 Who starts:</b> chosen at random.</li>
       <li><b>🤖 Bot levels:</b> <b>Easy</b> wanders and misses chances. <b>Medium</b> plays a solid game. <b>Hard</b> races you for the golden chest, hunts your carriers and plans both dice together.</li>
@@ -438,14 +439,11 @@
       <div class="seg" role="group" aria-label="Opponent">
         <button type="button" class="segbtn on" data-mode="2p"><span class="ico">👥</span> Two players</button>
         <button type="button" class="segbtn" data-mode="cpu"><span class="ico">🤖</span> Play the bot</button>
-        <button type="button" class="segbtn" data-mode="4p"><span class="ico">🐠</span> Four players</button>
       </div>
-      <select id="mode" hidden><option value="2p">Two players on this device</option><option value="cpu">Play against the computer</option><option value="4p">Four players on this device</option></select>
+      <select id="mode" hidden><option value="2p">Two players on this device</option><option value="cpu">Play against the computer</option></select>
       <div class="names">
         <div><label for="n1"><i class="chip c0"></i>Player 1 <small>teal, bottom</small></label><input type="text" id="n1" maxlength="14" value="Player 1"></div>
         <div id="p2box"><label for="n2"><i class="chip c1"></i>Player 2 <small>amber, top</small></label><input type="text" id="n2" maxlength="14" value="Player 2"></div>
-        <div id="p3box" hidden><label for="n3"><i class="chip c2"></i>Player 3 <small>purple, left</small></label><input type="text" id="n3" maxlength="14" value="Player 3"></div>
-        <div id="p4box" hidden><label for="n4"><i class="chip c3"></i>Player 4 <small>coral, right</small></label><input type="text" id="n4" maxlength="14" value="Player 4"></div>
         <div id="diffbox" hidden>
           <label id="difflbl"><i class="chip c1"></i>Computer difficulty</label>
           <div class="seg3" role="radiogroup" aria-labelledby="difflbl">
@@ -456,7 +454,6 @@
         </div>
       </div>
       <p class="diffnote" id="diffnote" hidden></p>
-      <p class="diffnote" id="fourhint" hidden>🐠 Four-player free-for-all: bottom, top, left and right reef edges are each a home row. All four players take turns on this device.</p>
       <p class="diffnote" id="hiddennote" hidden>🕳️ <b>Hidden Mode is on:</b> giant 23×23 reef, 8 divers each, 6 dice, 16 pearls, 2 chests, 2 tide tokens each. First to 10 wins. (Turn it off in Settings.)</p>
       <p class="record" id="record" hidden></p>
       <p style="margin:20px 0 0"><button class="alt" id="setupback">⬅ Back</button> <button id="start">🌊 Dive in</button></p>
@@ -521,14 +518,11 @@ const MAP_CLASSIC = [
 ];
 let MAP = MAP_CLASSIC;
 const T = (r, c) => { const ch = MAP[r][c]; return (ch === "K" || ch === "R" || ch === "W") ? ch : "."; };
-const homeRow = o => o === 0 ? N - 1 : 0; // retained for two-player AI heuristics
-const isHome = (o, r, c) => o === 0 ? r === N - 1 : o === 1 ? r === 0 : o === 2 ? c === 0 : c === N - 1;
-const homePosition = (o, i) => o === 0 ? [N - 1, START_COLS[i % DIVERS]] :
-  o === 1 ? [0, START_COLS[i % DIVERS]] :
-  o === 2 ? [START_COLS[i % DIVERS], 0] : [START_COLS[i % DIVERS], N - 1];
+const homeRow = o => o === 0 ? N - 1 : 0;
+const isHome = (o, r) => r === homeRow(o);
 const val = x => x === "chest" ? 2 : 1;
 const DIRS = [[1,0],[-1,0],[0,1],[0,-1]];
-const COLOR = ["#2ec4b6", "#ff9f1c", "#b58cff", "#ff718d"];
+const COLOR = ["#2ec4b6", "#ff9f1c"];
 let WHIRLS = [];
 function findWhirls(){ WHIRLS = []; for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (MAP[r][c] === "W") WHIRLS.push([r, c]); }
 findWhirls();
@@ -597,17 +591,6 @@ let G = null, aiTimer = null;
 const FX = {bump:new Set(), whirl:new Set(), roll:false, tidePick:null};   // visual-only hints for the animation layer
 let prevSnap = null, fxBusyUntil = 0, fxBank = false;
 const $ = id => document.getElementById(id);
-const TIDE_MAX = 3, TIDE_ROWS = [3, 8], TIDE_CHANCE = 0.05;
-function spawnTide(){
-  const cands = [];
-  for (let r = TIDE_ROWS[0]; r <= Math.min(TIDE_ROWS[1], N - 1); r++) for (let c = 0; c < N; c++){
-    if (T(r, c) === "R" || T(r, c) === "W" || G.items[r][c] || cellDiver(r, c)) continue;
-    cands.push([r, c]);
-  }
-  if (!cands.length) return;
-  const [r, c] = cands[Math.floor(Math.random() * cands.length)];
-  G.tideTile = {r, c}; log("A tide token drifts into the reef!");
-}
 
 // Scatter pearls at random: PEARL_PAIRS mirrored pairs (180-degree symmetric) inside the middle 7 rows
 let PEARL_PAIRS = 3, PEARL_ROWS = [3, 9];
@@ -626,17 +609,12 @@ function newGame(names, vsCpu, level){
   applyConfig(SET.hidden);
   const items = Array.from({length:N}, () => Array.from({length:N}, () => null));
   scatterPearls(items);
-  const divers = [], playerCount = names.length;
-  for (let o = 0; o < playerCount; o++) for (let i = 0; i < DIVERS; i++){
-    const [r, c] = homePosition(o, i);
-    divers.push({id:o * DIVERS + i, owner:o, label:"ABCDEFGH"[i], r, c, carry:null});
-  }
-  G = {names, vsCpu, playerCount, level:level || "medium", items, divers, score:Array(playerCount).fill(0),
-       turn:Math.floor(Math.random() * playerCount), phase:"roll", dice:[],
-       sel:{die:null, diver:null}, bonusTaken:false, tieChest:false, chestClaimed:false, tideTile:null, tide:Array(playerCount).fill(TIDES),
-       big:BIG, last:null, stats:Array.from({length:playerCount}, () => []), turnsDone:0,
-       chestSpawned:false, rerolled:false, over:false, winner:null, log:[]};
-  FX.bump.clear(); FX.whirl.clear(); FX.roll = false; prevSnap = null; fxBusyUntil = 0;
+  const divers = [];
+  [0, 1].forEach(o => START_COLS.forEach((c, i) =>
+    divers.push({id:o * DIVERS + i, owner:o, label:"ABCDEFGH"[i], r:homeRow(o), c, carry:null})));
+  G = {names, vsCpu, level:level || "medium", items, divers, score:[0,0], turn:Math.random() < 0.5 ? 0 : 1, phase:"roll", dice:[],
+       sel:{die:null, diver:null}, bonusTaken:false, tieChest:false, tide:[TIDES, TIDES], tideTile:null, chestClaimed:false, big:BIG, last:null, stats:[[], []], turnsDone:0, chestSpawned:false, rerolled:false, over:false, winner:null, log:[]};
+  FX.bump.clear(); FX.whirl.clear(); FX.roll = false; FX.tidePick = null; prevSnap = null; fxBusyUntil = 0;
   log(names[G.turn] + " goes first (chosen at random).");
 }
 const log = m => { G.log.unshift(m); if (G.log.length > 40) G.log.pop(); };
@@ -666,7 +644,7 @@ function computeReach(dv, budget){
       const t = T(nr, nc); if (t === "R") continue;
       const cost = d + (t === "K" ? 2 : 1); if (cost > budget) continue;
       const occ = cellDiver(nr, nc);
-      if (occ){ if (occ.owner === dv.owner) continue; if (isHome(occ.owner, occ.r, occ.c)) continue; }
+      if (occ){ if (occ.owner === dv.owner) continue; if (isHome(occ.owner, occ.r)) continue; }
       const k = key(nr, nc);
       if (best.has(k) && best.get(k) <= cost) continue;
       best.set(k, cost); queue.push([nr, nc, cost]);
@@ -682,12 +660,10 @@ function computeReach(dv, budget){
   return out;
 }
 function sendHome(dv){
-  const pref = START_COLS[dv.id % DIVERS];
+  const row = homeRow(dv.owner), pref = START_COLS[dv.id % DIVERS];
   const order = [...Array(N).keys()].sort((a, b) => Math.abs(a - pref) - Math.abs(b - pref));
-  for (const k of order){
-    const [r, c] = dv.owner === 0 ? [N - 1, k] : dv.owner === 1 ? [0, k] :
-      dv.owner === 2 ? [k, 0] : [k, N - 1];
-    if (!G.divers.some(x => x !== dv && x.r === r && x.c === c)){ dv.r = r; dv.c = c; return; }
+  for (const c of order){
+    if (!G.divers.some(x => x !== dv && x.r === row && x.c === c)){ dv.r = row; dv.c = c; return; }
   }
 }
 function dropItem(r, c, item){
@@ -708,14 +684,17 @@ function bump(target, msgs){
   msgs.push(G.names[target.owner] + "'s diver " + target.label + " is bumped home.");
 }
 function bankIfHome(dv, msgs){
-  if (!(dv.carry && isHome(dv.owner, dv.r, dv.c))) return;
+  if (!(dv.carry && isHome(dv.owner, dv.r))) return;
   const who = G.names[dv.owner], v = val(dv.carry);
   G.score[dv.owner] += v; dv.carry = null;
   msgs.push(who + " banks " + v + " point" + (v > 1 ? "s" : "") + "!");
-  if (v === 2 && !G.chestClaimed){ G.chestClaimed = true; msgs.push("The chest is claimed. Tide tokens may start drifting into the reef."); }
+  if (v === 2 && !G.chestClaimed){
+    G.chestClaimed = true;
+    msgs.push("A chest is claimed. Tide tokens may start drifting into the reef.");
+  }
   // Tiebreaker: everything is banked and it's 4-4, so a fresh chest surfaces in the middle
   const loose = G.items.some(row => row.some(x => x)) || G.divers.some(x => x.carry);
-  if (G.playerCount === 2 && !G.tieChest && G.score[0] === WIN - 1 && G.score[1] === WIN - 1 && !loose){
+  if (!G.tieChest && G.score[0] === WIN - 1 && G.score[1] === WIN - 1 && !loose){
     G.tieChest = true; G.items[MID][MID] = "chest";
     msgs.push("Tied " + (WIN - 1) + "-" + (WIN - 1) + "! A new golden chest surfaces in the middle of the reef!");
   }
@@ -728,7 +707,7 @@ function applyMove(dv, r, c){
   if (T(r, c) === "W"){
     const other = WHIRLS.find(w => !(w[0] === r && w[1] === c));
     const o2 = cellDiver(other[0], other[1]);
-    if (!o2 || (o2.owner !== dv.owner && !isHome(o2.owner, o2.r, o2.c))){
+    if (!o2 || (o2.owner !== dv.owner && !isHome(o2.owner, o2.r))){
       if (o2) bump(o2, msgs);
       dv.r = other[0]; dv.c = other[1]; FX.whirl.add(dv.id);
       msgs.push(who + "'s diver " + dv.label + " is swept through the whirlpool!");
@@ -779,13 +758,25 @@ function advance(){
   if (G.sel.diver && computeReach(G.sel.diver, budgetFor(G.sel.diver, G.dice[G.sel.die].v)).size === 0) G.sel.diver = null;
 }
 function finishTurn(){
-  G.turn = (G.turn + 1) % G.playerCount; G.turnsDone++; G.rerolled = false;
+  G.turn = 1 - G.turn; G.turnsDone++; G.rerolled = false;
   if (G.chestClaimed && !G.tideTile && Math.random() < TIDE_CHANCE) spawnTide();
   if (G.turnsDone === 4 && !G.chestSpawned){
     G.chestSpawned = true; CHEST_SPOTS.forEach(([r, c]) => { G.items[r][c] = "chest"; });
     log(CHEST_SPOTS.length > 1 ? "Two golden chests surface in the middle of the reef!" : "The golden chest surfaces in the middle of the reef!");
   }
   G.dice = []; G.phase = "roll"; G.sel = {die:null, diver:null};
+}
+const TIDE_MAX = 3, TIDE_CHANCE = 0.05;
+function spawnTide(){
+  const cands = [], r0 = Math.round(MID) - 3, r1 = Math.round(MID) + 2;     // the middle six rows
+  for (let r = r0; r <= r1; r++) for (let c = 0; c < N; c++){
+    if (T(r, c) === "R" || T(r, c) === "W" || G.items[r][c] || cellDiver(r, c)) continue;
+    cands.push([r, c]);
+  }
+  if (!cands.length) return;
+  const [r, c] = cands[Math.floor(Math.random() * cands.length)];
+  G.tideTile = {r, c};
+  log("A tide token drifts into the reef!");
 }
 function endTurn(){
   const dbl = hasMatch();
@@ -803,7 +794,7 @@ function rollAgain(){
 }
 // any eligible rival (opponents on their home row are safe; never hand a rival a free bank)
 function swapTargets(m){
-  return G.divers.filter(e => e.owner !== m.owner && !isHome(e.owner, e.r, e.c) && !(e.carry && isHome(e.owner, m.r, m.c)));
+  return G.divers.filter(e => e.owner !== m.owner && !isHome(e.owner, e.r) && !(e.carry && isHome(e.owner, m.r)));
 }
 function doSwap(m, e){
   const msgs = [], r = m.r, c = m.c;
@@ -848,7 +839,8 @@ function evalMove(dv, r, c){
   }
   const item = G.items[r][c];
   if (!dv.carry && item) s += item === "chest" ? 55 : 40;
-  if (dv.carry && isHome(o, r, c)) return s + 100 * val(dv.carry);
+  if (G.tideTile && G.tide[o] < TIDE_MAX && G.tideTile.r === r && G.tideTile.c === c) s += 18;
+  if (dv.carry && isHome(o, r)) return s + 100 * val(dv.carry);
   if (dv.carry){
     s += (Math.abs(dv.r - hr) - Math.abs(r - hr)) * 6;
     const threat = G.divers.some(x => x.owner !== o && Math.abs(x.r - r) + Math.abs(x.c - c) <= 3 && !isHome(x.owner, x.r));
@@ -857,9 +849,10 @@ function evalMove(dv, r, c){
     const goals = [];
     for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) if (G.items[i][j]) goals.push([i, j]);
     G.divers.forEach(x => { if (x.owner !== o && x.carry) goals.push([x.r, x.c]); });
+    if (G.tideTile && G.tide[o] < TIDE_MAX) goals.push([G.tideTile.r, G.tideTile.c]);
     const nd = (a, b) => goals.length ? Math.min(...goals.map(g => Math.abs(g[0] - a) + Math.abs(g[1] - b))) : 0;
     s += (nd(dv.r, dv.c) - nd(r, c)) * 3;
-    if (isHome(o, r, c)) s -= 6;
+    if (isHome(o, r)) s -= 6;
   }
   return s;
 }
@@ -906,14 +899,13 @@ function aiChooseEasy(){
 }
 
 /* ----- hard: tries every way to spend BOTH dice, then judges the resulting position ----- */
-function snapG(){ return {d:G.divers.map(x => [x.r, x.c, x.carry]), items:G.items.map(r => r.slice()), score:G.score.slice(), tie:G.tieChest,
-  tide:G.tide.slice(), tideTile:G.tideTile ? {...G.tideTile} : null, chestClaimed:G.chestClaimed, fb:[...FX.bump], fw:[...FX.whirl], tidePick:FX.tidePick}; }
+function snapG(){ return {d:G.divers.map(x => [x.r, x.c, x.carry]), items:G.items.map(r => r.slice()), score:G.score.slice(), tie:G.tieChest, tt:G.tideTile ? {r:G.tideTile.r, c:G.tideTile.c} : null, td:G.tide.slice(), cc:G.chestClaimed, fp:FX.tidePick, fb:[...FX.bump], fw:[...FX.whirl]}; }
 function restoreG(sn){
   G.divers.forEach((x, i) => { x.r = sn.d[i][0]; x.c = sn.d[i][1]; x.carry = sn.d[i][2]; });
   for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) G.items[r][c] = sn.items[r][c];
-  G.score = sn.score.slice(); G.tieChest = sn.tie; G.tide = sn.tide.slice();
-  G.tideTile = sn.tideTile ? {...sn.tideTile} : null; G.chestClaimed = sn.chestClaimed;
-  FX.bump.clear(); sn.fb.forEach(x => FX.bump.add(x)); FX.whirl.clear(); sn.fw.forEach(x => FX.whirl.add(x)); FX.tidePick = sn.tidePick;
+  G.score[0] = sn.score[0]; G.score[1] = sn.score[1]; G.tieChest = sn.tie;
+  G.tideTile = sn.tt ? {r:sn.tt.r, c:sn.tt.c} : null; G.tide[0] = sn.td[0]; G.tide[1] = sn.td[1]; G.chestClaimed = sn.cc; FX.tidePick = sn.fp;
+  FX.bump.clear(); sn.fb.forEach(x => FX.bump.add(x)); FX.whirl.clear(); sn.fw.forEach(x => FX.whirl.add(x));
 }
 const manh = (a, b, c, d) => Math.abs(a - c) + Math.abs(b - d);
 function sideEval(o){
@@ -934,7 +926,7 @@ function sideEval(o){
   const pull = (r, c, w) => { const m = near(r, c); return m === 99 ? 0 : w * 30 / (1 + Math.max(1, m) * .35); };
   for (let r = 0; r < N; r++) for (let c = 0; c < N; c++){ const it = G.items[r][c]; if (it) sc += pull(r, c, it === "chest" ? 3.2 : 1); }   // the chest counts triple
   if (!G.chestSpawned) CHEST_SPOTS.forEach(([cr, cc]) => { sc += pull(cr, cc, 3.2); });          // the chest is about to surface: get a diver ready beside it
-  theirs.forEach(e => { if (e.carry && !isHome(e.owner, e.r, e.c)){ const m = near(e.r, e.c); if (m < 99) sc += val(e.carry) * 26 / (1 + m * .4); } });   // hunt rival carriers
+  theirs.forEach(e => { if (e.carry && !isHome(e.owner, e.r)){ const m = near(e.r, e.c); if (m < 99) sc += val(e.carry) * 26 / (1 + m * .4); } });   // hunt rival carriers
   return sc;
 }
 const posEval = o => G.score[o] >= WIN ? 1e6 : sideEval(o) - sideEval(1 - o);
@@ -1099,6 +1091,7 @@ const SVG = {
   kelp: '<svg viewBox="0 0 40 40"><g fill="none" stroke="#7ee0a6" stroke-width="3" stroke-linecap="round"><path d="M10 38 Q4 28 10 20 Q16 12 10 4"/><path d="M20 38 Q14 28 20 20 Q26 12 20 4"/><path d="M30 38 Q24 28 30 20 Q36 12 30 4"/></g></svg>',
   rock: '<svg viewBox="0 0 40 40"><polygon points="6,34 10,16 20,8 31,14 35,34" fill="#8da0b3"/><polygon points="20,8 31,14 35,34 22,34" fill="#6f8397"/></svg>',
   whirl: '<svg viewBox="0 0 40 40"><g class="spin"><path d="M20 20 m0 0 a3 3 0 0 1 6 0 a8 8 0 0 1 -16 0 a13 13 0 0 1 26 0 a18 18 0 0 1 -36 0" fill="none" stroke="#d9f3ff" stroke-width="2.4" stroke-linecap="round" opacity=".9"/></g></svg>',
+  tide: '<svg viewBox="0 0 40 40"><defs><radialGradient id="tg" cx="35%" cy="30%"><stop offset="0" stop-color="#e9fbff"/><stop offset="1" stop-color="#3ab4e8"/></radialGradient></defs><circle cx="20" cy="20" r="12" fill="url(#tg)" stroke="#fff" stroke-width="2"/><path d="M11 21q3-5 6 0t6 0 6 0" fill="none" stroke="#0b5c8a" stroke-width="2.4" stroke-linecap="round"/></svg>',
   pearl: '<svg viewBox="0 0 40 40"><defs><radialGradient id="pg" cx="35%" cy="30%"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#e5b9d6"/></radialGradient></defs><circle cx="20" cy="22" r="9" fill="url(#pg)" stroke="#fff" stroke-opacity=".7"/></svg>',
   chest: '<svg viewBox="0 0 40 40"><rect x="7" y="14" width="26" height="18" rx="3" fill="#f2b632" stroke="#8a5a00" stroke-width="2"/><rect x="7" y="14" width="26" height="7" rx="3" fill="#ffd45c" stroke="#8a5a00" stroke-width="2"/><rect x="17.5" y="19" width="5" height="6" rx="1" fill="#8a5a00"/></svg>'
 };
@@ -1317,6 +1310,12 @@ const SFX = (() => {
       }
     }),
     bubbles: play(() => { whoosh(0, .9, 300, 900, 500, .12); for (let i = 0; i < 9; i++){ const f = rnd(350, 800); tone(f, rnd(0, .8), .09, "sine", .07, f * rnd(1.6, 2.4)); } }),
+    tide: play(delay => {
+      const at = (delay || 0) / 1000;
+      whoosh(at, .8, 400, 1800, 900, .22);
+      [392, 523.25, 659.25, 880, 1174.7].forEach((f, i) => { tone(f, at + .1 + i * .08, .34, "sine", .2); tone(f * 2, at + .1 + i * .08, .2, "triangle", .05); });
+    }),
+    tideSpawn: play(delay => { const at = (delay || 0) / 1000; tone(880, at, .4, "sine", .14); tone(1318.5, at + .12, .5, "sine", .12); whoosh(at, .5, 500, 1400, 700, .08); }),
     bump: play(delay => { const at = (delay || 0) / 1000; tone(170, at, .28, "sine", .45, 45); whoosh(at, .25, 900, 300, 120, .3, "lowpass"); }),
     whirl: play(() => { whoosh(0, .95, 300, 1500, 300, .25); tone(300, 0, .9, "sine", .1, 900); tone(900, .45, .45, "sine", .08, 280); }),
     score: play((gain, delay) => {
@@ -1401,14 +1400,17 @@ function fxSoundsOnly(p, bumped, whirled){
     if (bumped.has(d.id)) SFX.bump(); else if (whirled.has(d.id)) SFX.whirl();
     else if (!moved++) SFX.swim(Math.abs(or - d.r) + Math.abs(oc - d.c), slideDur(1));
   });
-  G.names.forEach((_, o) => { const g = G.score[o] - p.score[o]; if (g > 0){ fxBank = true; SFX.score(g, 0); } });
+  [0, 1].forEach(o => { const g = G.score[o] - p.score[o]; if (g > 0){ fxBank = true; SFX.score(g, 0); } });
+  if (p.tide && !G.tideTile) SFX.tide(0);
+  else if (!p.tide && G.tideTile) SFX.tideSpawn(0);
 }
 
 function fxAfterRender(){
-  const snap = {game:G, pos:{}, carry:{}, score:G.score.slice(), items:G.items.flat().map(x => !!x)};
+  const snap = {game:G, pos:{}, carry:{}, score:G.score.slice(), items:G.items.flat().map(x => !!x), tide:G.tideTile ? {r:G.tideTile.r, c:G.tideTile.c} : null};
   G.divers.forEach(d => { snap.pos[d.id] = [d.r, d.c]; snap.carry[d.id] = d.carry; });
   const p = prevSnap; prevSnap = snap;
   const rolled = FX.roll, bumped = new Set(FX.bump), whirled = new Set(FX.whirl);
+  const tidePick = FX.tidePick; FX.tidePick = null;
   FX.roll = false; FX.bump.clear(); FX.whirl.clear(); fxBank = false;
   if (REDUCE){ fxSoundsOnly(p, bumped, whirled); return; }
   if (rolled) tumble();
@@ -1486,12 +1488,11 @@ function fxAfterRender(){
   }
 
   // points: float text, burst, score pop
-  G.names.forEach((_, o) => {
+  [0, 1].forEach(o => {
     const gain = G.score[o] - p.score[o];
     if (gain <= 0) return;
-    const bk = G.divers.find(d => d.owner === o && p.carry[d.id] && !d.carry && isHome(o, d.r, d.c));
-    const [hr, hc] = o === 0 ? [N - 1, MID] : o === 1 ? [0, MID] : o === 2 ? [MID, 0] : [MID, N - 1];
-    const pos = bk ? ctr(bk.r, bk.c) : ctr(hr, hc);
+    const bk = G.divers.find(d => d.owner === o && p.carry[d.id] && !d.carry && isHome(o, d.r));
+    const pos = bk ? ctr(bk.r, bk.c) : ctr(homeRow(o), MID);
     const delay = bk && dur[bk.id] ? dur[bk.id] - 40 : 0;
     const big = gain > 1;
     fxBank = true; SFX.score(gain, delay);
@@ -1510,6 +1511,36 @@ function fxAfterRender(){
     }
     busy = Math.max(busy, delay + 1100);
   });
+  // tide token: pops in when it drifts onto the reef, flies to the scoreboard when someone grabs it
+  if (!p.tide && G.tideTile){
+    const tk = board.children[G.tideTile.r * N + G.tideTile.c].querySelector(".tok"), b = ctr(G.tideTile.r, G.tideTile.c);
+    if (tk) tk.animate([{transform:"translateY(-34px) scale(.2)", opacity:0}, {transform:"translateY(4px) scale(1.35)", opacity:1, offset:.6}, {transform:"none", opacity:1}],
+                       {duration:700, delay:300, easing:"ease-out", fill:"backwards"});
+    ringAt(b.x, b.y, b.w * 1.2, 300, "#7fd4f5"); ringAt(b.x, b.y, b.w * 1.2, 520, "#e9fbff");
+    burst(b.x, b.y, ["\u{1F30A}", "\u{1F4A7}", "\u2728"], 6, {dist:b.w * .9, delay:300, dur:900});
+    SFX.tideSpawn(300);
+  }
+  if (p.tide && !G.tideTile && tidePick !== null){
+    const o = tidePick, b = ctr(p.tide.r, p.tide.c);
+    const dv = G.divers.find(d => d.r === p.tide.r && d.c === p.tide.c);
+    const delay = dv && dur[dv.id] ? dur[dv.id] - 40 : 0;
+    ringAt(b.x, b.y, b.w * 1.2, delay, "#7fd4f5"); ringAt(b.x, b.y, b.w * 1.2, delay + 160, "#ffffff");
+    burst(b.x, b.y, ["\u{1F30A}", "\u{1F4A7}", "\u{1FAE7}", "\u2728"], 12, {dist:b.w * 1.2, delay, dur:1100});
+    floatText(b.x, b.y - b.w * .4, "+1 TIDE", "#7fd4f5", delay);
+    SFX.tide(delay);
+    const card = $("score").children[o], line = card && card.querySelector(".tdline");
+    if (card){
+      const cr = card.getBoundingClientRect(), dx = cr.left + 40 - lr.left - b.x, dy = cr.bottom - 14 - lr.top - b.y;
+      const fly = fxEl("", b.x, b.y, "\u{1F30A}", "font-size:30px");
+      fxRun(fly, [{transform:"translate(0,0) scale(.6)", opacity:0},
+                  {transform:"translate(0,-34px) scale(1.7) rotate(-20deg)", opacity:1, offset:.3},
+                  {transform:"translate(" + dx + "px," + dy + "px) scale(.8) rotate(20deg)", opacity:1, offset:.92},
+                  {transform:"translate(" + dx + "px," + dy + "px) scale(.3)", opacity:0}], {duration:1100, delay:delay + 150, easing:"ease-in-out"});
+      if (line) line.animate([{transform:"scale(1)"}, {transform:"scale(1.5)", color:"#7fd4f5", offset:.4}, {transform:"scale(1)"}], {duration:800, delay:delay + 1200});
+      card.animate([{boxShadow:"0 0 0 0 rgba(127,212,245,.95)", background:"rgba(127,212,245,.4)"}, {boxShadow:"0 0 30px 12px rgba(127,212,245,0)", background:"rgba(0,0,0,.25)"}], {duration:1100, delay:delay + 1100});
+    }
+    busy = Math.max(busy, delay + 1600);
+  }
   if (busy) fxBusyUntil = Math.max(fxBusyUntil, performance.now() + busy);
 }
 
@@ -1532,13 +1563,13 @@ function render(){
   const human = !isCpu(G.turn) && !G.over;
   // scores
   const sc = $("score"); sc.textContent = "";
-  G.names.forEach((_, o) => {
+  [0, 1].forEach(o => {
     const d = document.createElement("div");
     d.className = "pl p" + o + (G.turn === o && !G.over ? " on" : "");
     const b = document.createElement("b"), lv = levelOf(o); b.textContent = G.names[o] + (lv ? " " + LEVELS[lv].icon : "");
     const p = document.createElement("div"); p.className = "pts"; p.textContent = G.score[o] + " / " + WIN;
-    const tk = document.createElement("div"); tk.style.cssText = "font-size:.8rem;color:var(--muted)";
-    tk.textContent = "\u{1F30A} Tide token" + (G.tide[o] === 1 ? ": 1 ready" : "s: " + G.tide[o] + " left");
+    const tk = document.createElement("div"); tk.className = "tdline"; tk.style.cssText = "font-size:.8rem;color:var(--muted);display:inline-block;transform-origin:left center";
+    tk.textContent = "\u{1F30A} Tide tokens: " + G.tide[o] + (G.tide[o] >= TIDE_MAX ? " (full)" : "");
     const pips = document.createElement("div"); pips.className = "pips";
     for (let i = 0; i < WIN; i++){ const sp = document.createElement("span"); if (i < G.score[o]) sp.className = "on"; pips.appendChild(sp); }
     d.append(b, p, pips, tk); sc.appendChild(d);
@@ -1556,7 +1587,7 @@ function render(){
   $("roll").hidden = !(human && G.phase === "roll"); $("roll").disabled = false;
   $("tide").hidden = !(human && G.phase === "move" && G.tide[G.turn]);
   $("tide").disabled = !(G.tide[G.turn] && !G.dice.some(d => d.used));
-  $("tide").textContent = "🌊 Use tide token (reroll) · " + G.tide[G.turn] + " left";
+  $("tide").textContent = "\u{1F30A} Use tide token (reroll)" + (G.tide[G.turn] > 1 ? " x" + G.tide[G.turn] : "");
   $("skip").hidden = !(human && G.phase === "swap"); $("skip").textContent = G.rerolled ? "End turn" : "Roll again";
   let st;
   if (G.over) st = G.names[G.winner] + " wins!";
@@ -1574,7 +1605,6 @@ function render(){
   else if (human && G.phase === "swap" && G.sel.diver)
     reach = new Set(swapTargets(G.sel.diver).map(e => e.r + "," + e.c));
   const board = $("board"); board.textContent = "";
-  board.classList.toggle("fourp", G.playerCount === 4);
   board.style.gridTemplateColumns = "repeat(" + N + ",1fr)"; $("game").classList.toggle("big", BIG);
   for (let r = 0; r < N; r++) for (let c = 0; c < N; c++){
     const t = T(r, c), dv = cellDiver(r, c), item = G.items[r][c];
@@ -1582,18 +1612,17 @@ function render(){
     const mine = human && dv && dv.owner === G.turn && (G.phase === "move" || (G.phase === "swap" && swapTargets(dv).length > 0));
     const b = document.createElement("button");
     b.type = "button";
-    b.className = "cell t-" + (t === "." ? "W0" : t) +
-      (r === N - 1 ? " home0" : "") + (r === 0 ? " home1" : "") +
-      (G.playerCount === 4 && c === 0 ? " home2" : "") + (G.playerCount === 4 && c === N - 1 ? " home3" : "") +
+    b.className = "cell t-" + (t === "." ? "W0" : t) + (r === 0 ? " home1" : "") + (r === N - 1 ? " home0" : "") +
       (isDest ? " dest" + (dv ? " bumpdest" : "") : "") + (mine ? " mine" : "") + (dv && G.sel.diver === dv ? " sel" : "");
     let html = t === "K" ? SVG.kelp : t === "R" ? SVG.rock : t === "W" ? SVG.whirl : "";
     if (item) html += '<span class="itm">' + SVG[item === "chest" ? "chest" : "pearl"] + '</span>';
-    if (G.tideTile && G.tideTile.r === r && G.tideTile.c === c) html += '<span class="itm" style="font-size:1.6em;display:grid;place-items:center">🌊</span>';
+    const hasTide = !!(G.tideTile && G.tideTile.r === r && G.tideTile.c === c);
+    if (hasTide) html += '<span class="tok">' + SVG.tide + '</span>';
     if (dv) html += diverSvg(dv);
     b.innerHTML = html;
     const label = "Row " + (r + 1) + ", column " + (c + 1) + ": " +
       (t === "K" ? "kelp" : t === "R" ? "rock" : t === "W" ? "whirlpool" : "water") +
-      (item ? ", " + item : "") + (G.tideTile && G.tideTile.r === r && G.tideTile.c === c ? ", tide token" : "") + (dv ? ", " + G.names[dv.owner] + " diver " + dv.label : "") + (isDest ? ", can move here" : "");
+      (item ? ", " + item : "") + (hasTide ? ", tide token" : "") + (dv ? ", " + G.names[dv.owner] + " diver " + dv.label : "") + (isDest ? ", can move here" : "");
     b.setAttribute("aria-label", label);
     if (isDest){
       b.onclick = () => { if (G.phase === "swap") doSwap(G.sel.diver, dv); else doMove(G.sel.diver, r, c); update(); };
@@ -1619,7 +1648,7 @@ function render(){
     }
     const avg = a => a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : "–";
     const acc = mk("div", "an-acc");
-    G.names.forEach((_, o) => { const sp = mk("span", "", G.names[o] + ": " + avg(G.stats[o]) + " avg (" + G.stats[o].length + " moves)"); sp.style.color = COLOR[o]; acc.appendChild(sp); });
+    [0, 1].forEach(o => { const sp = mk("span", "", G.names[o] + ": " + avg(G.stats[o]) + " avg (" + G.stats[o].length + " moves)"); sp.style.color = COLOR[o]; acc.appendChild(sp); });
     ac.appendChild(acc);
   }
   // log
@@ -1635,7 +1664,7 @@ function render(){
     $("over-acc").textContent = (SET.analyst && (G.stats[0].length || G.stats[1].length))
       ? "🔍 Average move rating: " + G.names[0] + " " + (avgR(G.stats[0]) ?? "–") + " · " + G.names[1] + " " + (avgR(G.stats[1]) ?? "–") : "";
     $("over-title").textContent = G.names[G.winner] + " wins the reef!";
-    $("over-sub").textContent = G.names.map((n, i) => n + " " + G.score[i]).join(" · ");
+    $("over-sub").textContent = G.names[0] + " " + G.score[0] + " – " + G.score[1] + " " + G.names[1];
     const showOver = () => { if (G && G.over){ $("over").hidden = false; $("again").focus(); celebrate(); } };
     if (fxBank && !REDUCE){ $("over").hidden = true; setTimeout(showOver, 1500); }
     else { $("over").hidden = false; setTimeout(() => $("again").focus(), 0); celebrate(); }
@@ -1695,10 +1724,7 @@ function setDiff(d){
 function setMode(v){
   $("mode").value = v;
   document.querySelectorAll(".segbtn").forEach(b => b.classList.toggle("on", b.dataset.mode === v));
-  $("p2box").hidden = v === "cpu";
-  $("p3box").hidden = v !== "4p"; $("p4box").hidden = v !== "4p";
-  $("fourhint").hidden = v !== "4p";
-  $("diffbox").hidden = v !== "cpu"; $("diffnote").hidden = v !== "cpu";
+  $("p2box").hidden = v === "cpu"; $("diffbox").hidden = v !== "cpu"; $("diffnote").hidden = v !== "cpu";   // bot mode: the Player 2 name becomes the difficulty picker
   setDiff(DIFF);
 }
 function begin(){
@@ -1707,13 +1733,7 @@ function begin(){
   try { localStorage.setItem("reefName", $("n1").value.trim()); } catch (e) {}
   let n2 = vs ? "Computer" : ($("n2").value.trim() || "Player 2");
   if (n2 === n1) n2 += " 2";
-  let names = [n1, n2];
-  if ($("mode").value === "4p"){
-    const n3 = $("n3").value.trim() || "Player 3", n4 = $("n4").value.trim() || "Player 4";
-    names = [n1, n2, n3, n4];
-    names = names.map((n, i) => names.slice(0, i).includes(n) ? n + " " + (i + 1) : n);
-  }
-  newGame(names, vs, DIFF);
+  newGame([n1, n2], vs, DIFF);
   show("game"); $("over").hidden = true;
   update();
 }
